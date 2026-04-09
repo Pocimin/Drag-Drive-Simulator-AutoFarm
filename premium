@@ -127,7 +127,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
     warn("=====================")
 
     -- Auto-rejoin system (after config loaded)
-    local SCRIPT_URL = "https://beta.vonalia.com/Obfuscate/nzntpremium"
+    local SCRIPT_URL = "https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/premium"
     local scriptSource = ""
     pcall(function() scriptSource = game:HttpGet(SCRIPT_URL, true) end)
     
@@ -753,10 +753,8 @@ if not game:IsLoaded() then game.Loaded:Wait() end
         isRespawning = true; farmingActive = false
         vStatus.Text = "Reached " .. formatNumber(FARM_THRESHOLD) .. "! Respawning..."
         
-        local elapsed = os.time() - startTime
-        local earned = startMoney and (getMoney() - startMoney) or 0
-        totalEarned = totalEarned + earned; totalTime = totalTime + elapsed
-        if writefile then writefile("nznt_stealth_stats.txt", tostring(totalEarned) .. "," .. tostring(totalTime)) end
+        -- Don't update totalEarned/totalTime here - UI handles it with session values
+        -- This prevents double counting
         
         sendKey(Enum.KeyCode.Space); task.wait(0.5)
         cleanupPhysics()
@@ -874,25 +872,30 @@ if not game:IsLoaded() then game.Loaded:Wait() end
     task.spawn(function()
         while task.wait(0.5) do
             if not farmingActive then continue end
-            if not sessionStartTime then continue end
-            local sessionElapsed = os.time() - sessionStartTime
+            if not startTime then continue end
+            
             local money = getMoney()
+            -- Earned THIS bike (resets on each spawn)
+            local earnedThisBike = startMoney and (money - startMoney) or 0
+            -- For money/hour, use session time
+            local sessionElapsed = sessionStartTime and (os.time() - sessionStartTime) or 0
             local sessionEarned = sessionStartMoney and (money - sessionStartMoney) or 0
             local mph = sessionElapsed > 60 and math.floor((sessionEarned/sessionElapsed)*3600) or 0
             
             vCurrent.Text = "Rp. " .. formatNumber(money)
-            vEarned.Text = "Rp. " .. formatNumber(math.max(0, sessionEarned))
+            vEarned.Text = "Rp. " .. formatNumber(math.max(0, earnedThisBike))
             vMoneyHour.Text = sessionElapsed > 60 and ("Rp. " .. formatNumber(mph) .. " /hr") or "Calculating..."
-            vElapsed.Text = formatTime(sessionElapsed)
+            vElapsed.Text = formatTime(os.time() - startTime)
             vPing.Text = getPing() .. " ms"
             vFPS.Text = tostring(lastFPS)
             
+            -- Total stats = saved totals + current session
             local ct = totalEarned + sessionEarned
             local ctt = totalTime + sessionElapsed
             vTotalEarned.Text = "Rp. " .. formatNumber(ct)
             vTotalTime.Text = formatTime(ctt)
             
-            if sessionElapsed % 30 < 1 and writefile then
+            if sessionElapsed > 0 and sessionElapsed % 30 < 1 and writefile then
                 writefile("nznt_stealth_stats.txt", tostring(ct) .. "," .. tostring(ctt))
             end
         end
