@@ -749,40 +749,10 @@ task.wait(2)
             end
         end
 
-        -- Cleanup except platform and walls (exactly like autofarm.lua)
+        -- Cleanup except platform (exactly like autofarm.lua)
         for _, obj in pairs(workspace:GetChildren()) do
-            if obj ~= workspace.CurrentCamera and obj ~= char and obj ~= savedFloor and not obj:IsA("Terrain") and obj.Name ~= "EdgeWall" then
+            if obj ~= workspace.CurrentCamera and obj ~= char and obj ~= savedFloor and not obj:IsA("Terrain") then
                 obj:Destroy()
-            end
-        end
-        
-        -- Create invisible walls at platform edges to prevent falling off
-        if savedFloor then
-            local floorPos = savedFloor.Position
-            local floorSize = savedFloor.Size
-            local halfX = floorSize.X / 2
-            local halfZ = floorSize.Z / 2
-            local wallHeight = 100
-            local wallThickness = 10
-            
-            local wallData = {
-                {name = "EdgeWall", size = Vector3.new(floorSize.X + wallThickness*2, wallHeight, wallThickness), pos = Vector3.new(floorPos.X, floorPos.Y + wallHeight/2, floorPos.Z - halfZ - wallThickness/2)},
-                {name = "EdgeWall", size = Vector3.new(floorSize.X + wallThickness*2, wallHeight, wallThickness), pos = Vector3.new(floorPos.X, floorPos.Y + wallHeight/2, floorPos.Z + halfZ + wallThickness/2)},
-                {name = "EdgeWall", size = Vector3.new(wallThickness, wallHeight, floorSize.Z + wallThickness*2), pos = Vector3.new(floorPos.X - halfX - wallThickness/2, floorPos.Y + wallHeight/2, floorPos.Z)},
-                {name = "EdgeWall", size = Vector3.new(wallThickness, wallHeight, floorSize.Z + wallThickness*2), pos = Vector3.new(floorPos.X + halfX + wallThickness/2, floorPos.Y + wallHeight/2, floorPos.Z)},
-            }
-            
-            for _, wd in ipairs(wallData) do
-                local wall = Instance.new("Part", workspace)
-                wall.Name = wd.name
-                wall.Size = wd.size
-                wall.Position = wd.pos
-                wall.Anchored = true
-                wall.CanCollide = true
-                wall.Transparency = 1
-                wall.Material = Enum.Material.SmoothPlastic
-                wall.TopSurface = Enum.SurfaceType.Smooth
-                wall.BottomSurface = Enum.SurfaceType.Smooth
             end
         end
     end
@@ -950,10 +920,9 @@ task.wait(2)
             vTotalEarned.Text = "Rp. " .. formatNumber(ct)
             vTotalTime.Text = formatTime(ctt)
             
-            -- Save totals periodically (every ~30s)
+            -- Save combined totals to file periodically for crash recovery (don't update in-memory totals)
             if sessionElapsed > 0 and sessionElapsed % 30 < 1 and writefile then
-                totalEarned = ct; totalTime = ctt
-                writefile("nznt_stealth_stats.txt", tostring(totalEarned) .. "," .. tostring(totalTime))
+                writefile("nznt_stealth_stats.txt", tostring(ct) .. "," .. tostring(ctt))
             end
         end
     end)
