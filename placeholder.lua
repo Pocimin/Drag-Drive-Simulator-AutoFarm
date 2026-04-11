@@ -57,8 +57,8 @@ task.wait(2)
     local MAX_SPEED         = 400
     local CHECK_DISTANCE    = 15
     local HUGE_PLATFORM_SIZE= 2000
-    local FARM_THRESHOLD    = 1000000
-    local DEFAULT_THRESHOLD = 1000000
+    local FARM_THRESHOLD    = 500000
+    local DEFAULT_THRESHOLD = 500000
     local MIN_THRESHOLD     = 500000
     local MAX_THRESHOLD     = 5000000
 
