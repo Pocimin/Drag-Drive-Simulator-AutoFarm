@@ -85,7 +85,7 @@ local function LoadnzntUI()
 		-- Config system
 		['"/settings"'] = '"/nznt_settings"',
 		['".luna"'] = '".nznt"',
-		['"%.luna"'] = '"%.nznt"',
+		['"%.luna"'] = '"%%.nznt"',
 		
 		-- Credits and branding
 		["Nebula Softworks"] = "_nznt",
