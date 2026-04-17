@@ -1,2 +1,0 @@
---Put in autoexec!
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/DDS%20AutoFarm_nznt.lua"))()
