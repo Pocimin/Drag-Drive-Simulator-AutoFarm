@@ -129,6 +129,25 @@ task.wait(2)
     end
     loadConfig()
     
+    -- Load shared webhook config from loader
+    local WEBHOOK_FILE = "nznt_webhook_config.json"
+    local function loadSharedWebhookConfig()
+        if not isfile or not readfile or not isfile(WEBHOOK_FILE) then return end
+        local ok, content = pcall(function() return readfile(WEBHOOK_FILE) end)
+        if ok and content then
+            local ok2, data = pcall(function() return game:GetService("HttpService"):JSONDecode(content) end)
+            if ok2 and data then
+                -- Only override if shared config has values
+                if data.url and data.url ~= "" then
+                    webhookUrl = data.url
+                    webhookInterval = data.interval or 60
+                    warn("[Auto Drive Farm] Webhook loaded from loader: " .. (data.enabled and "enabled" or "disabled"))
+                end
+            end
+        end
+    end
+    loadSharedWebhookConfig()
+    
     -- Debug: show loaded values
     warn("=== CONFIG LOADED ===")
     warn("autoRejoinEnabled:", autoRejoinEnabled)
