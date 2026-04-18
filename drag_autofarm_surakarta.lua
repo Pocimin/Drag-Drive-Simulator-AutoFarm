@@ -57,9 +57,9 @@ task.wait(2)
 -- CONFIG
 -- =====================
 local SURAKARTA_ID = 131378148336503
-local RACE_DELAY = 15
-local CHECKPOINT_DELAY = 1.5
-local LOOP_DELAY = 2
+local RACE_DELAY = 0
+local CHECKPOINT_DELAY = 3
+local LOOP_DELAY = 8
 local SAVE_FILE = "nznt_dragfarm.json"
 local WEBHOOK_FILE = "nznt_webhook_config.json"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/drag_autofarm_surakarta.lua"
