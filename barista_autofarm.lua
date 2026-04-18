@@ -1,9 +1,3 @@
--- ============================================
--- BARISTA AUTOFARM - Premium UI Edition
--- Creator: _nznt
--- Discord: discord.gg/q6dUF4CsKH
--- ============================================
-
 local d = false
 local h = {}
 local x, y
@@ -42,12 +36,9 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 task.wait(2)
 
 -- SETTINGS
-local AutofarmEnabled = false
+local AutofarmEnabled = true
 local NoclipEnabled = false
 local AntiAFKEnabled = true
-local farmingActive = false
-local sessionStartMoney = 0
-local sessionStartTime = 0
 
 local Player = game.Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
@@ -55,20 +46,26 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local RunService = game:GetService("RunService")
 local VIM = game:GetService("VirtualInputManager")
 local VirtualUser = game:GetService("VirtualUser")
-local UserInputService = game:GetService("UserInputService")
 
 local Remote = game:GetService("ReplicatedStorage")
     .BaristaAssets.Events.BaristaEvent
 
 -- =====================
--- STATS FUNCTIONS
+-- WEBHOOK SUPPORT
 -- =====================
+local WEBHOOK_FILE = "nznt_webhook_config.json"
+local HttpService = game:GetService("HttpService")
+local webhookUrl = ""
+local webhookInterval = 60
+local webhookEnabled = false
+local lastWebhookTime = 0
+local sessionStart = os.time()
+local ordersCompleted = 0
+local startMoney = 0
+
 local function getMoney()
     local pd = Player:FindFirstChild("PlayerData")
-    if pd then
-        local rp = pd:FindFirstChild("RPValue")
-        if rp then return rp.Value end
-    end
+    if pd then local rp = pd:FindFirstChild("RPValue") if rp then return rp.Value end end
     return 0
 end
 
@@ -81,12 +78,66 @@ local function formatTime(t)
     return string.format("%02d:%02d:%02d", math.floor(t/3600)%24, math.floor(t/60)%60, t%60)
 end
 
+local function loadWebhookConfig()
+    local ok, content = pcall(function() return readfile(WEBHOOK_FILE) end)
+    if ok and content then
+        local ok2, data = pcall(function() return HttpService:JSONDecode(content) end)
+        if ok2 and data then
+            webhookUrl = data.url or ""
+            webhookInterval = data.interval or 60
+            webhookEnabled = data.enabled or false
+            warn("[Barista Autofarm] Webhook config loaded: " .. (webhookEnabled and "enabled" or "disabled"))
+        end
+    end
+end
+
+local function sendWebhook()
+    if not webhookEnabled or webhookUrl == "" or not webhookUrl:find("discord") then return end
+    if (os.time() - lastWebhookTime) < webhookInterval then return end
+    
+    local money = getMoney()
+    local earned = money - startMoney
+    local sessionElapsed = os.time() - sessionStart
+    local mph = sessionElapsed > 60 and math.floor((math.max(0, earned) / sessionElapsed) * 3600) or 0
+    
+    local body = '{"embeds":[{"title":"Barista Autofarm","color":16776960,"fields":['
+        ..'{"name":"💰 Current Money","value":"Rp. ' .. formatNumber(money) .. '","inline":true},'
+        ..'{"name":"📈 Session Earned","value":"Rp. ' .. formatNumber(math.max(0, earned)) .. '","inline":true},'
+        ..'{"name":"⚡ Money/Hour","value":"Rp. ' .. formatNumber(mph) .. '","inline":true},'
+        ..'{"name":"⏱ Session Time","value":"' .. formatTime(sessionElapsed) .. '","inline":true},'
+        ..'{"name":"☕ Orders","value":"' .. tostring(ordersCompleted) .. '","inline":true},'
+        ..'{"name":"📍 Map","value":"Barista Simulator","inline":true}'
+        ..'],"footer":{"text":"by _nznt — Barista Autofarm"}}]}'
+    
+    local ok = pcall(function()
+        request({
+            Url = webhookUrl,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = body
+        })
+    end)
+    if ok then
+        lastWebhookTime = os.time()
+        warn("[Barista Autofarm] Webhook sent!")
+    end
+end
+
+loadWebhookConfig()
+startMoney = getMoney()
+
 -- =====================
 -- 🔥 NEW MINIGAME SOLVER
 -- =====================
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+
+print("[Minigame Solver] Loading...")
+
 local isRunning = false
 local connection = nil
 
+-- Find minigame GUI
 local function findMinigameGui()
     for _, gui in ipairs(Player.PlayerGui:GetChildren()) do
         local minigameFrame = gui:FindFirstChild("MinigameFrame", true)
@@ -97,10 +148,12 @@ local function findMinigameGui()
     return nil
 end
 
+-- Find PlayerCursor (white bar)
 local function findPlayerCursor(minigameFrame)
     local cursor = minigameFrame:FindFirstChild("PlayerCursor", true)
     if cursor then return cursor end
     
+    -- Fallback: small horizontal bar
     for _, element in ipairs(minigameFrame:GetDescendants()) do
         if element:IsA("Frame") and element.AbsoluteSize.Y < 15 and element.AbsoluteSize.Y > 5 then
             if element.AbsoluteSize.X > 100 and element.AbsoluteSize.X < 150 then
@@ -108,9 +161,11 @@ local function findPlayerCursor(minigameFrame)
             end
         end
     end
+    
     return nil
 end
 
+-- Check if we should click (cursor is below target zone)
 local function shouldClick(playerCursor, targetZone)
     if not playerCursor or not targetZone then return false end
     
@@ -125,11 +180,15 @@ local function shouldClick(playerCursor, targetZone)
     return cursorCenter > (targetCenter + 10)
 end
 
+-- Main solver loop (optimized - runs every 0.1s instead of every frame)
+local lastClick = 0
 local function solve()
+    if tick() - lastClick < 0.05 then return end -- throttle clicks
+    
     local minigameFrame = findMinigameGui()
     if not minigameFrame then
-        print("[Minigame Solver] Minigame closed")
         if connection then connection:Disconnect() end
+        connection = nil
         isRunning = false
         return
     end
@@ -137,55 +196,37 @@ local function solve()
     local tapZone = minigameFrame:FindFirstChild("TapZone")
     local targetZone = minigameFrame:FindFirstChild("TargetZone", true)
     local playerCursor = findPlayerCursor(minigameFrame)
-    local progressBar = minigameFrame:FindFirstChild("ProgressBar", true)
     
-    if not tapZone or not targetZone or not playerCursor then
-        return
+    if not tapZone or not targetZone or not playerCursor then return end
+    
+    local tapButton = tapZone:FindFirstChildWhichIsA("GuiButton", true)
+    if not tapButton then
+        tapButton = tapZone:FindFirstChildWhichIsA("TextButton", true)
     end
-    
-    local tapButton = nil
-    for _, child in ipairs(tapZone:GetDescendants()) do
-        if child:IsA("GuiButton") or child:IsA("TextButton") or child:IsA("ImageButton") then
-            tapButton = child
-            break
-        end
-    end
-    
-    if not tapButton and (tapZone:IsA("GuiButton") or tapZone:IsA("TextButton") or tapZone:IsA("ImageButton")) then
-        tapButton = tapZone
+    if not tapButton then
+        tapButton = tapZone:FindFirstChildWhichIsA("ImageButton", true)
     end
     
     if not tapButton then return end
     
     if shouldClick(playerCursor, targetZone) then
+        lastClick = tick()
         pcall(function()
             for _, conn in pairs(getconnections(tapButton.MouseButton1Click)) do
                 conn:Fire()
             end
         end)
-        pcall(function()
-            for _, conn in pairs(getconnections(tapButton.MouseButton1Down)) do
-                conn:Fire()
-            end
-        end)
-        pcall(function()
-            for _, conn in pairs(getconnections(tapButton.Activated)) do
-                conn:Fire()
-            end
-        end)
     end
     
-    if progressBar then
-        local progress = progressBar.Size.X.Scale
-        if progress >= 0.99 then
-            print("[Minigame Solver] Complete!")
-            if connection then connection:Disconnect() end
-            isRunning = false
-        end
+    local progressBar = minigameFrame:FindFirstChild("ProgressBar", true)
+    if progressBar and progressBar.Size.X.Scale >= 0.99 then
+        if connection then connection:Disconnect() end
+        connection = nil
+        isRunning = false
     end
 end
 
-local function startSolver()
+local function start()
     if isRunning then return end
     
     print("[Minigame Solver] Waiting for minigame...")
@@ -207,149 +248,44 @@ local function startSolver()
     connection = RunService.Heartbeat:Connect(solve)
 end
 
-task.spawn(function()
-    while true do
-        task.wait(0.5)
+-- Minigame solver monitor (with cleanup)
+local solverMonitor = nil
+local function startSolverMonitor()
+    if solverMonitor then solverMonitor:Disconnect() end
+    solverMonitor = RunService.Heartbeat:Connect(function()
         if not isRunning and findMinigameGui() then
             startSolver()
         end
+    end)
+end
+startSolverMonitor()
+
+print("[Minigame Solver] Ready!")
+
+_G.MinigameSolver = {
+    start = start,
+    stop = function()
+        isRunning = false
+        if connection then connection:Disconnect() end
     end
-end)
+}
 
 -- =====================
--- UI SETUP
+-- JOIN BARISTA TEAM
 -- =====================
-local Gui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
-Gui.Name = "nznt_BaristaUI"; Gui.IgnoreGuiInset = true; Gui.DisplayOrder = 999; Gui.ResetOnSpawn = false
-
-local MainFrame = Instance.new("Frame", Gui)
-MainFrame.Size = UDim2.new(0, 320, 0, 400); MainFrame.Position = UDim2.new(0, 20, 0, 20)
-MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-MainFrame.BorderSizePixel = 0; MainFrame.ZIndex = 1
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
-
--- Top Bar
-local TopBar = Instance.new("Frame", MainFrame)
-TopBar.Size = UDim2.new(1, 0, 0, 44); TopBar.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
-TopBar.BorderSizePixel = 0; TopBar.ZIndex = 2
-Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 8)
-
-local TopTitle = Instance.new("TextLabel", TopBar)
-TopTitle.Size = UDim2.new(1, -80, 1, 0); TopTitle.Position = UDim2.new(0, 14, 0, 0)
-TopTitle.BackgroundTransparency = 1; TopTitle.Text = "BARISTA FARM  ·  nznt_"
-TopTitle.TextColor3 = Color3.fromRGB(255, 215, 0); TopTitle.Font = Enum.Font.GothamBold
-TopTitle.TextSize = 13; TopTitle.TextXAlignment = Enum.TextXAlignment.Left; TopTitle.ZIndex = 3
-
--- Hide Button
-local hideBtn = Instance.new("TextButton", TopBar)
-hideBtn.Size = UDim2.new(0, 60, 0, 28); hideBtn.Position = UDim2.new(1, -70, 0.5, -14)
-hideBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40); hideBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-hideBtn.Font = Enum.Font.GothamBold; hideBtn.TextSize = 11; hideBtn.Text = "HIDE"
-hideBtn.ZIndex = 3; hideBtn.BorderSizePixel = 0
-Instance.new("UICorner", hideBtn).CornerRadius = UDim.new(0, 6)
-
--- Content Frame
-local ContentFrame = Instance.new("Frame", MainFrame)
-ContentFrame.Size = UDim2.new(1, -20, 1, -54); ContentFrame.Position = UDim2.new(0, 10, 0, 49)
-ContentFrame.BackgroundTransparency = 1; ContentFrame.ZIndex = 2
-
--- Status Section
-local statusLabel = Instance.new("TextLabel", ContentFrame)
-statusLabel.Size = UDim2.new(1, 0, 0, 20); statusLabel.Position = UDim2.new(0, 0, 0, 0)
-statusLabel.BackgroundTransparency = 1; statusLabel.Text = "Status: Idle"
-statusLabel.TextColor3 = Color3.fromRGB(255, 215, 0); statusLabel.Font = Enum.Font.GothamBold
-statusLabel.TextSize = 14; statusLabel.TextXAlignment = Enum.TextXAlignment.Left; statusLabel.ZIndex = 3
-
--- Money Earned Row
-local moneyLabel = Instance.new("TextLabel", ContentFrame)
-moneyLabel.Size = UDim2.new(1, 0, 0, 18); moneyLabel.Position = UDim2.new(0, 0, 0, 25)
-moneyLabel.BackgroundTransparency = 1; moneyLabel.Text = "Session Earned: Rp. 0"
-moneyLabel.TextColor3 = Color3.fromRGB(200, 200, 200); moneyLabel.Font = Enum.Font.Gotham
-moneyLabel.TextSize = 12; moneyLabel.TextXAlignment = Enum.TextXAlignment.Left; moneyLabel.ZIndex = 3
-
--- Time Row
-local timeLabel = Instance.new("TextLabel", ContentFrame)
-timeLabel.Size = UDim2.new(1, 0, 0, 18); timeLabel.Position = UDim2.new(0, 0, 0, 45)
-timeLabel.BackgroundTransparency = 1; timeLabel.Text = "Session Time: 00:00:00"
-timeLabel.TextColor3 = Color3.fromRGB(200, 200, 200); timeLabel.Font = Enum.Font.Gotham
-timeLabel.TextSize = 12; timeLabel.TextXAlignment = Enum.TextXAlignment.Left; timeLabel.ZIndex = 3
-
--- Toggle Button
-local toggleBtn = Instance.new("TextButton", ContentFrame)
-toggleBtn.Size = UDim2.new(1, 0, 0, 40); toggleBtn.Position = UDim2.new(0, 0, 0, 75)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 70); toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.Font = Enum.Font.GothamBold; toggleBtn.TextSize = 14; toggleBtn.Text = "START FARMING"
-toggleBtn.ZIndex = 3; toggleBtn.BorderSizePixel = 0
-Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 6)
-
--- Settings Section
-local settingsLabel = Instance.new("TextLabel", ContentFrame)
-settingsLabel.Size = UDim2.new(1, 0, 0, 20); settingsLabel.Position = UDim2.new(0, 0, 0, 130)
-settingsLabel.BackgroundTransparency = 1; settingsLabel.Text = "SETTINGS"
-settingsLabel.TextColor3 = Color3.fromRGB(255, 215, 0); settingsLabel.Font = Enum.Font.GothamBold
-settingsLabel.TextSize = 12; settingsLabel.TextXAlignment = Enum.TextXAlignment.Left; settingsLabel.ZIndex = 3
-
--- Noclip Toggle
-local noclipBtn = Instance.new("TextButton", ContentFrame)
-noclipBtn.Size = UDim2.new(1, 0, 0, 30); noclipBtn.Position = UDim2.new(0, 0, 0, 155)
-noclipBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40); noclipBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-noclipBtn.Font = Enum.Font.Gotham; noclipBtn.TextSize = 12; noclipBtn.Text = "Noclip: OFF"
-noclipBtn.ZIndex = 3; noclipBtn.BorderSizePixel = 0
-Instance.new("UICorner", noclipBtn).CornerRadius = UDim.new(0, 6)
-
--- Anti-AFK Toggle
-local antiafkBtn = Instance.new("TextButton", ContentFrame)
-antiafkBtn.Size = UDim2.new(1, 0, 0, 30); antiafkBtn.Position = UDim2.new(0, 0, 0, 190)
-antiafkBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40); antiafkBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-antiafkBtn.Font = Enum.Font.Gotham; antiafkBtn.TextSize = 12; antiafkBtn.Text = "Anti-AFK: ON"
-antiafkBtn.ZIndex = 3; antiafkBtn.BorderSizePixel = 0
-Instance.new("UICorner", antiafkBtn).CornerRadius = UDim.new(0, 6)
-
--- Credits
-local creditLabel = Instance.new("TextLabel", ContentFrame)
-creditLabel.Size = UDim2.new(1, 0, 0, 30); creditLabel.Position = UDim2.new(0, 0, 1, -30)
-creditLabel.BackgroundTransparency = 1; creditLabel.Text = "by _nznt | discord.gg/q6dUF4CsKH"
-creditLabel.TextColor3 = Color3.fromRGB(130, 130, 130); creditLabel.Font = Enum.Font.Gotham
-creditLabel.TextSize = 10; creditLabel.TextXAlignment = Enum.TextXAlignment.Center; creditLabel.ZIndex = 3
-
--- =====================
--- UI FUNCTIONS
--- =====================
-local uiVisible = true
-hideBtn.MouseButton1Click:Connect(function()
-    uiVisible = not uiVisible
-    ContentFrame.Visible = uiVisible
-    MainFrame.BackgroundTransparency = uiVisible and 0 or 1
-    TopBar.BackgroundTransparency = uiVisible and 0 or 1
-    TopTitle.TextTransparency = uiVisible and 0 or 1
-    hideBtn.Text = uiVisible and "HIDE" or "SHOW"
-end)
-
-noclipBtn.MouseButton1Click:Connect(function()
-    NoclipEnabled = not NoclipEnabled
-    noclipBtn.Text = "Noclip: " .. (NoclipEnabled and "ON" or "OFF")
-    noclipBtn.BackgroundColor3 = NoclipEnabled and Color3.fromRGB(0, 150, 70) or Color3.fromRGB(40, 40, 40)
-end)
-
-antiafkBtn.MouseButton1Click:Connect(function()
-    AntiAFKEnabled = not AntiAFKEnabled
-    antiafkBtn.Text = "Anti-AFK: " .. (AntiAFKEnabled and "ON" or "OFF")
-    antiafkBtn.BackgroundColor3 = AntiAFKEnabled and Color3.fromRGB(0, 150, 70) or Color3.fromRGB(40, 40, 40)
-end)
-
--- Update stats loop
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if farmingActive then
-            local currentMoney = getMoney()
-            local earned = math.max(0, currentMoney - sessionStartMoney)
-            local elapsed = tick() - sessionStartTime
-            moneyLabel.Text = "Session Earned: Rp. " .. formatNumber(earned)
-            timeLabel.Text = "Session Time: " .. formatTime(elapsed)
+local function joinBaristaTeam()
+    print("[Barista Farm] Joining Barista team...")
+    local TeamGui = Player.PlayerGui:FindFirstChild("TeamSelection")
+    if TeamGui then
+        local BaristaButton = TeamGui:FindFirstChild("BaristaButton", true)
+        if BaristaButton and BaristaButton:IsA("TextButton") then
+            for _, connection in pairs(getconnections(BaristaButton.MouseButton1Click)) do
+                connection:Fire()
+            end
+            task.wait(1)
         end
     end
-end)
+end
 
 -- =====================
 -- CHARACTER HANDLING
@@ -367,16 +303,28 @@ Player.Idled:Connect(function()
     end
 end)
 
--- Noclip
-RunService.Stepped:Connect(function()
-    if NoclipEnabled and Character then
-        for _, part in ipairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
+-- Noclip (optimized - only runs when enabled)
+local noclipConnection = nil
+local function setNoclip(enabled)
+    NoclipEnabled = enabled
+    if enabled then
+        if noclipConnection then noclipConnection:Disconnect() end
+        noclipConnection = RunService.Heartbeat:Connect(function()
+            if Character then
+                for _, part in ipairs(Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
             end
+        end)
+    else
+        if noclipConnection then
+            noclipConnection:Disconnect()
+            noclipConnection = nil
         end
     end
-end)
+end
 
 -- =====================
 -- SEAT SYSTEM
@@ -422,6 +370,7 @@ end
 local function PressKeyE(duration)
     duration = duration or 0.5
     
+    -- Method 1: VirtualInputManager (hold E)
     local success = pcall(function()
         VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
         task.wait(duration)
@@ -429,6 +378,7 @@ local function PressKeyE(duration)
     end)
     
     if not success then
+        -- Method 2: VirtualUser fallback (hold E)
         pcall(function()
             VirtualUser:CaptureController()
             VirtualUser:SetKeyDown(Enum.KeyCode.E)
@@ -438,6 +388,7 @@ local function PressKeyE(duration)
     end
 end
 
+-- Legacy FirePrompt for compatibility
 local function FirePrompt(position, maxDist)
     maxDist = maxDist or 20
     for _, v in ipairs(workspace:GetDescendants()) do
@@ -449,23 +400,30 @@ local function FirePrompt(position, maxDist)
             end
         end
     end
+    -- Fallback to key press
     PressKeyE(0.5)
     return true
 end
 
+local walkConnections = {}
 local function WalkTo(position, speed)
     local hum = Character:FindFirstChildOfClass("Humanoid")
     if not hum then return end
+
+    -- Cleanup old connections
+    for _, conn in ipairs(walkConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    walkConnections = {}
 
     hum.WalkSpeed = speed or 16
     hum:MoveTo(position)
 
     local reached = false
-    local conn
-    conn = hum.MoveToFinished:Connect(function()
+    local conn = hum.MoveToFinished:Connect(function()
         reached = true
-        conn:Disconnect()
     end)
+    table.insert(walkConnections, conn)
 
     local start = tick()
     repeat
@@ -473,24 +431,7 @@ local function WalkTo(position, speed)
         if tick() - start > 0.5 then hum:MoveTo(position) end
     until reached or tick() - start > 30
 
-    if conn then conn:Disconnect() end
-end
-
--- =====================
--- JOIN BARISTA TEAM
--- =====================
-local function joinBaristaTeam()
-    print("[Barista Farm] Joining Barista team...")
-    local TeamGui = Player.PlayerGui:FindFirstChild("TeamSelection")
-    if TeamGui then
-        local BaristaButton = TeamGui:FindFirstChild("BaristaButton", true)
-        if BaristaButton and BaristaButton:IsA("TextButton") then
-            for _, connection in pairs(getconnections(BaristaButton.MouseButton1Click)) do
-                connection:Fire()
-            end
-            task.wait(1)
-        end
-    end
+    pcall(function() conn:Disconnect() end)
 end
 
 -- =====================
@@ -527,101 +468,95 @@ end
 -- AUTOFARM
 -- =====================
 local function RunAutofarm()
+    -- Join team first
     joinBaristaTeam()
     
     local seat = getSeat()
     if not seat then
         warn("No seat found!")
-        statusLabel.Text = "Status: No seat found"
         return
     end
 
     local hum = Character:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
+    -- sit
     seat.CFrame = HumanoidRootPart.CFrame * CFrame.new(0, -2, -3)
     task.wait(0.3)
     seat:Sit(hum)
     task.wait(0.8)
 
+    -- travel
     SeatTo(Vector3.new(-658.01, 3.18, -701.16))
     SeatTo(Vector3.new(-755.63, 3.80, -641.64))
     SeatTo(Vector3.new(-5011.18, 3.80, -588.81))
 
+    -- NEW: Job position logic with freeze
     local jobPos = Vector3.new(-4989.87, 4.29, -714.39)
+
     SeatTo(jobPos)
 
+    -- jump using real input
     VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
     task.wait(0.1)
     VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
 
     task.wait(0.4)
 
+    -- destroy seat
     local seat = getSeat()
     if seat then
         seat:Destroy()
         currentSeat = nil
     end
 
+    -- freeze movement
     local root = HumanoidRootPart
     local oldVel = root.Velocity
     root.Velocity = Vector3.zero
 
     task.wait(0.5)
+
+    -- press E key
     PressKeyE(1)
+
     task.wait(0.5)
 
+    -- restore movement
     root.Velocity = oldVel
 
-    sessionStartMoney = getMoney()
-    sessionStartTime = tick()
-
     while AutofarmEnabled do
+        -- Send webhook if enabled
+        sendWebhook()
+        
         if CheckMachineBroke() then
             RepairMachine()
         end
 
-        statusLabel.Text = "Status: Brewing..."
+        -- Walk to brewing machine and hold E
         WalkTo(Vector3.new(-4997.14, 4.29, -795.25), 16)
         PressKeyE(1.5)
 
+        -- Wait for minigame to complete
         local minigameWait = 0
         while isRunning and minigameWait < 15 do
             task.wait(0.5)
             minigameWait = minigameWait + 0.5
         end
         
+        -- Small buffer after minigame
         task.wait(0.5)
 
-        statusLabel.Text = "Status: Serving..."
+        -- Walk to cashier and hold E
         WalkTo(Vector3.new(-4995.79, 4.29, -759.78), 16)
         PressKeyE(1.5)
 
+        -- Count completed order
+        ordersCompleted = ordersCompleted + 1
+
         task.wait(3)
     end
-
-    farmingActive = false
-    statusLabel.Text = "Status: Stopped"
-    toggleBtn.Text = "START FARMING"
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 70)
 end
 
--- Toggle Button Handler
-toggleBtn.MouseButton1Click:Connect(function()
-    if farmingActive then
-        AutofarmEnabled = false
-        farmingActive = false
-        statusLabel.Text = "Status: Stopping..."
-        toggleBtn.Text = "START FARMING"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 70)
-    else
-        AutofarmEnabled = true
-        farmingActive = true
-        statusLabel.Text = "Status: Starting..."
-        toggleBtn.Text = "STOP FARMING"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        task.spawn(RunAutofarm)
-    end
-end)
-
-print("[Barista Autofarm] UI Loaded! Press START FARMING to begin.")
+-- START
+task.spawn(RunAutofarm)
