@@ -343,15 +343,7 @@ task.wait(2)
         if attachment then attachment:Destroy() attachment = nil end
     end
 
-    -- Anti-AFK
-    coroutine.wrap(function()
-        while true do
-            task.wait(300)
-            if farmingActive and Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") then
-                sendKey(Enum.KeyCode.W); sendKey(Enum.KeyCode.S)
-            end
-        end
-    end)()
+    -- Anti-AFK removed - now handled by UI loader
 
     local function fireCarEvent(name, ...)
         local sf = RS:FindFirstChild("SpawnCarEvents")
