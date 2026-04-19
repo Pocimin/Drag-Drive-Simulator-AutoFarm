@@ -355,8 +355,13 @@ function MacLib:Window(Settings)
 	globalSettingsButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	globalSettingsButton.BorderSizePixel = 0
 	globalSettingsButton.Position = UDim2.fromScale(1, 0.5)
-	globalSettingsButton.Size = UDim2.fromOffset(16,16)
+	globalSettingsButton.Size = UDim2.fromOffset(24, 24)
 	globalSettingsButton.Parent = informationHolder
+
+	local logoUICorner = Instance.new("UICorner")
+	logoUICorner.Name = "LogoUICorner"
+	logoUICorner.CornerRadius = UDim.new(0, 6)
+	logoUICorner.Parent = globalSettingsButton
 
 	local function ChangeGlobalSettingsButtonState(State)
 		if State == "Default" then
@@ -1519,42 +1524,25 @@ function MacLib:Window(Settings)
 			elementsScrollingUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 			elementsScrollingUIListLayout.Parent = elementsScrolling
 
-			local left = Instance.new("Frame")
-			left.Name = "Left"
-			left.AutomaticSize = Enum.AutomaticSize.Y
-			left.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-			left.BackgroundTransparency = 1
-			left.BorderColor3 = Color3.fromRGB(0, 0, 0)
-			left.BorderSizePixel = 0
-			left.Position = UDim2.fromScale(0.512, 0)
-			left.Size = UDim2.new(0.5, -10, 0, 0)
+			local contentColumn = Instance.new("Frame")
+			contentColumn.Name = "ContentColumn"
+			contentColumn.AutomaticSize = Enum.AutomaticSize.Y
+			contentColumn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+			contentColumn.BackgroundTransparency = 1
+			contentColumn.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			contentColumn.BorderSizePixel = 0
+			contentColumn.Size = UDim2.new(1, 0, 0, 0)
 
-			local leftUIListLayout = Instance.new("UIListLayout")
-			leftUIListLayout.Name = "LeftUIListLayout"
-			leftUIListLayout.Padding = UDim.new(0, 15)
-			leftUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-			leftUIListLayout.Parent = left
+			local columnUIListLayout = Instance.new("UIListLayout")
+			columnUIListLayout.Name = "ColumnUIListLayout"
+			columnUIListLayout.Padding = UDim.new(0, 15)
+			columnUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			columnUIListLayout.Parent = contentColumn
 
-			left.Parent = elementsScrolling
+			contentColumn.Parent = elementsScrolling
 
-			local right = Instance.new("Frame")
-			right.Name = "Right"
-			right.AutomaticSize = Enum.AutomaticSize.Y
-			right.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-			right.BackgroundTransparency = 1
-			right.BorderColor3 = Color3.fromRGB(0, 0, 0)
-			right.BorderSizePixel = 0
-			right.LayoutOrder = 1
-			right.Position = UDim2.fromScale(0.512, 0)
-			right.Size = UDim2.new(0.5, -10, 0, 0)
-
-			local rightUIListLayout = Instance.new("UIListLayout")
-			rightUIListLayout.Name = "RightUIListLayout"
-			rightUIListLayout.Padding = UDim.new(0, 15)
-			rightUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-			rightUIListLayout.Parent = right
-
-			right.Parent = elementsScrolling
+			local left = contentColumn
+			local right = contentColumn
 
 			elementsScrolling.Parent = elements1
 
@@ -1570,7 +1558,8 @@ function MacLib:Window(Settings)
 				section.Position = UDim2.fromScale(0, 6.78e-08)
 				section.Size = UDim2.fromScale(1, 0)
 				section.ClipsDescendants = true
-				section.Parent = Settings.Side == "Left" and left or right
+				-- NZNT: All sections go to full-width column (ignore Side parameter)
+			section.Parent = left
 
 				local sectionUICorner = Instance.new("UICorner")
 				sectionUICorner.Name = "SectionUICorner"
