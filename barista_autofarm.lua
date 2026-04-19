@@ -38,7 +38,6 @@ task.wait(2)
 -- SETTINGS
 local AutofarmEnabled = true
 local NoclipEnabled = false
-local AntiAFKEnabled = true
 
 local Player = game.Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
@@ -293,14 +292,6 @@ end
 Player.CharacterAdded:Connect(function(c)
     Character = c
     HumanoidRootPart = c:WaitForChild("HumanoidRootPart")
-end)
-
--- Anti-AFK
-Player.Idled:Connect(function()
-    if AntiAFKEnabled then
-        local hum = Character and Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-    end
 end)
 
 -- Noclip (optimized - only runs when enabled)
