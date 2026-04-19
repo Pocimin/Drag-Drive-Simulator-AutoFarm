@@ -290,7 +290,6 @@ end
 -- =====================
 local raceCount = 0
 local active = true
-local antiAfkEnabled = true
 local lowGraphicsEnabled = true
 local lastFPS = 60
 
@@ -618,8 +617,7 @@ local function makeToggle(icon, label, default, order, onToggle)
     refresh()
 end
 
-makeToggle("◎", "Anti-AFK", true, 42, function(v) antiAfkEnabled = v end)
-makeToggle("◑", "Low Graphics", true, 43, function(v)
+makeToggle("◑", "Low Graphics", true, 42, function(v)
     lowGraphicsEnabled = v; settings().Rendering.QualityLevel = v and 1 or 10
 end)
 
@@ -650,13 +648,7 @@ aL.TextWrapped = true
 -- =====================
 RunService.Heartbeat:Connect(function(dt) if dt > 0 then lastFPS = math.floor(1/dt) end end)
 
-local VirtualUser = game:GetService("VirtualUser")
-Player.Idled:Connect(function()
-    if not antiAfkEnabled then return end
-    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    task.wait(1)
-    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-end)
+-- Anti-AFK removed - now handled by UI loader
 
 task.spawn(function()
     while true do
