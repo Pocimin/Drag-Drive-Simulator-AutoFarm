@@ -111,7 +111,7 @@ function MacLib:Window(Settings)
 	base.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	base.BorderSizePixel = 0
 	base.Position = UDim2.fromScale(0.5, 0.5)
-	base.Size = Settings.Size or UDim2.fromOffset(868, 650)
+	base.Size = Settings.Size or UDim2.fromOffset(800, 650)
 
 	local baseUIScale = Instance.new("UIScale")
 	baseUIScale.Name = "BaseUIScale"
@@ -1614,6 +1614,20 @@ function MacLib:Window(Settings)
 					buttonInteract.Size = UDim2.fromScale(1, 1)
 					buttonInteract.Parent = button
 					buttonInteract.Text = ButtonFunctions.Settings.Name
+					buttonInteract.AutoButtonColor = false
+
+					-- NZNT: Rounded box styling for buttons
+					local buttonCorner = Instance.new("UICorner")
+					buttonCorner.Name = "ButtonCorner"
+					buttonCorner.CornerRadius = UDim.new(0, 8)
+					buttonCorner.Parent = buttonInteract
+
+					local buttonStroke = Instance.new("UIStroke")
+					buttonStroke.Name = "ButtonStroke"
+					buttonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+					buttonStroke.Color = Color3.fromRGB(255, 255, 255)
+					buttonStroke.Transparency = 0.9
+					buttonStroke.Parent = buttonInteract
 
 					local buttonImage = Instance.new("ImageLabel")
 					buttonImage.Name = "ButtonImage"
