@@ -111,7 +111,7 @@ function MacLib:Window(Settings)
 	base.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	base.BorderSizePixel = 0
 	base.Position = UDim2.fromScale(0.5, 0.5)
-	base.Size = Settings.Size or UDim2.fromOffset(800, 650)
+	base.Size = Settings.Size or UDim2.fromOffset(750, 650)
 
 	local baseUIScale = Instance.new("UIScale")
 	baseUIScale.Name = "BaseUIScale"
@@ -1628,6 +1628,12 @@ function MacLib:Window(Settings)
 					buttonStroke.Color = Color3.fromRGB(255, 255, 255)
 					buttonStroke.Transparency = 0.9
 					buttonStroke.Parent = buttonInteract
+
+					-- NZNT: Add padding to move text right
+					local buttonUIPadding = Instance.new("UIPadding")
+					buttonUIPadding.Name = "ButtonUIPadding"
+					buttonUIPadding.PaddingLeft = UDim.new(0, 12)
+					buttonUIPadding.Parent = buttonInteract
 
 					local buttonImage = Instance.new("ImageLabel")
 					buttonImage.Name = "ButtonImage"
