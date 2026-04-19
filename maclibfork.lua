@@ -4593,12 +4593,235 @@ function MacLib:Window(Settings)
 					end
 					function SpacerFunctions:SetVisibility(State)
 						spacer.Visible = State
-					end
 
 					return SpacerFunctions
 				end
 
 				return SectionFunctions
+			end
+
+			-- NZNT: LockedSection for Premium features
+			function TabFunctions:LockedSection(Settings)
+				local LockedSectionFunctions = {}
+
+				local lockedSection = Instance.new("Frame")
+				lockedSection.Name = "LockedSection"
+				lockedSection.AutomaticSize = Enum.AutomaticSize.Y
+				lockedSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				lockedSection.BackgroundTransparency = 0.98
+				lockedSection.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				lockedSection.BorderSizePixel = 0
+				lockedSection.Position = UDim2.fromScale(0, 6.78e-08)
+				lockedSection.Size = UDim2.fromScale(1, 0)
+				lockedSection.ClipsDescendants = true
+				lockedSection.Parent = left
+
+				local sectionUICorner = Instance.new("UICorner")
+				sectionUICorner.Name = "SectionUICorner"
+				sectionUICorner.Parent = lockedSection
+
+				local sectionUIStroke = Instance.new("UIStroke")
+				sectionUIStroke.Name = "SectionUIStroke"
+				sectionUIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+				sectionUIStroke.Color = Color3.fromRGB(255, 255, 255)
+				sectionUIStroke.Transparency = 0.95
+				sectionUIStroke.Parent = lockedSection
+
+				local sectionUIListLayout = Instance.new("UIListLayout")
+				sectionUIListLayout.Name = "SectionUIListLayout"
+				sectionUIListLayout.Padding = UDim.new(0, 10)
+				sectionUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+				sectionUIListLayout.Parent = lockedSection
+
+				local sectionUIPadding = Instance.new("UIPadding")
+				sectionUIPadding.Name = "SectionUIPadding"
+				sectionUIPadding.PaddingBottom = UDim.new(0, 20)
+				sectionUIPadding.PaddingLeft = UDim.new(0, 20)
+				sectionUIPadding.PaddingRight = UDim.new(0, 18)
+				sectionUIPadding.PaddingTop = UDim.new(0, 22)
+				sectionUIPadding.Parent = lockedSection
+
+				-- Header
+				local header = Instance.new("Frame")
+				header.Name = "Header"
+				header.AutomaticSize = Enum.AutomaticSize.Y
+				header.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+				header.BackgroundTransparency = 1
+				header.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				header.BorderSizePixel = 0
+				header.LayoutOrder = 0
+				header.Size = UDim2.fromScale(1, 0)
+				header.Parent = lockedSection
+
+				local uIPadding = Instance.new("UIPadding")
+				uIPadding.Name = "UIPadding"
+				uIPadding.PaddingBottom = UDim.new(0, 5)
+				uIPadding.Parent = header
+
+				local headerText = Instance.new("TextLabel")
+				headerText.Name = "HeaderText"
+				headerText.FontFace = Font.new(
+					assets.interFont,
+					Enum.FontWeight.Medium,
+					Enum.FontStyle.Normal
+				)
+				headerText.RichText = true
+				headerText.Text = Settings.Name or "Premium Feature"
+				headerText.TextColor3 = Color3.fromRGB(255, 255, 255)
+				headerText.TextSize = 16
+				headerText.TextTransparency = 0.3
+				headerText.TextWrapped = true
+				headerText.TextXAlignment = Enum.TextXAlignment.Left
+				headerText.AutomaticSize = Enum.AutomaticSize.Y
+				headerText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				headerText.BackgroundTransparency = 1
+				headerText.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				headerText.BorderSizePixel = 0
+				headerText.Size = UDim2.fromScale(1, 0)
+				headerText.Parent = header
+
+				-- Content holder (will be blacked out)
+				local contentHolder = Instance.new("Frame")
+				contentHolder.Name = "ContentHolder"
+				contentHolder.AutomaticSize = Enum.AutomaticSize.Y
+				contentHolder.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+				contentHolder.BackgroundTransparency = 0.8
+				contentHolder.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				contentHolder.BorderSizePixel = 0
+				contentHolder.LayoutOrder = 1
+				contentHolder.Size = UDim2.fromScale(1, 0)
+				contentHolder.Parent = lockedSection
+
+				local contentHolderCorner = Instance.new("UICorner")
+				contentHolderCorner.Name = "ContentHolderCorner"
+				contentHolderCorner.CornerRadius = UDim.new(0, 8)
+				contentHolderCorner.Parent = contentHolder
+
+				local contentUIPadding = Instance.new("UIPadding")
+				contentUIPadding.Name = "ContentUIPadding"
+				contentUIPadding.PaddingBottom = UDim.new(0, 20)
+				contentUIPadding.PaddingLeft = UDim.new(0, 20)
+				contentUIPadding.PaddingRight = UDim.new(0, 20)
+				contentUIPadding.PaddingTop = UDim.new(0, 20)
+				contentUIPadding.Parent = contentHolder
+
+				-- Lock icon holder (centered)
+				local lockHolder = Instance.new("Frame")
+				lockHolder.Name = "LockHolder"
+				lockHolder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				lockHolder.BackgroundTransparency = 1
+				lockHolder.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				lockHolder.BorderSizePixel = 0
+				lockHolder.Size = UDim2.fromScale(1, 0)
+				lockHolder.AutomaticSize = Enum.AutomaticSize.Y
+				lockHolder.Parent = contentHolder
+
+				local lockHolderLayout = Instance.new("UIListLayout")
+				lockHolderLayout.Name = "LockHolderLayout"
+				lockHolderLayout.Padding = UDim.new(0, 10)
+				lockHolderLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+				lockHolderLayout.SortOrder = Enum.SortOrder.LayoutOrder
+				lockHolderLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+				lockHolderLayout.Parent = lockHolder
+
+				-- Lock icon (using emoji or text)
+				local lockIcon = Instance.new("TextLabel")
+				lockIcon.Name = "LockIcon"
+				lockIcon.FontFace = Font.new(
+					assets.interFont,
+					Enum.FontWeight.Bold,
+					Enum.FontStyle.Normal
+				)
+				lockIcon.Text = ""
+				lockIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+				lockIcon.TextSize = 40
+				lockIcon.TextTransparency = 0.3
+				lockIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				lockIcon.BackgroundTransparency = 1
+				lockIcon.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				lockIcon.BorderSizePixel = 0
+				lockIcon.Size = UDim2.fromOffset(50, 50)
+				lockIcon.Parent = lockHolder
+
+				-- Premium text
+				local premiumText = Instance.new("TextLabel")
+				premiumText.Name = "PremiumText"
+				premiumText.FontFace = Font.new(
+					assets.interFont,
+					Enum.FontWeight.SemiBold,
+					Enum.FontStyle.Normal
+				)
+				premiumText.Text = "Buy Premium to access!"
+				premiumText.TextColor3 = Color3.fromRGB(255, 255, 255)
+				premiumText.TextSize = 14
+				premiumText.TextTransparency = 0.4
+				premiumText.TextWrapped = true
+				premiumText.TextXAlignment = Enum.TextXAlignment.Center
+				premiumText.AutomaticSize = Enum.AutomaticSize.Y
+				premiumText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				premiumText.BackgroundTransparency = 1
+				premiumText.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				premiumText.BorderSizePixel = 0
+				premiumText.Size = UDim2.fromScale(1, 0)
+				premiumText.Parent = lockHolder
+
+				-- Clickable overlay
+				local clickOverlay = Instance.new("TextButton")
+				clickOverlay.Name = "ClickOverlay"
+				clickOverlay.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json")
+				clickOverlay.Text = ""
+				clickOverlay.TextColor3 = Color3.fromRGB(0, 0, 0)
+				clickOverlay.TextSize = 14
+				clickOverlay.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				clickOverlay.BackgroundTransparency = 1
+				clickOverlay.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				clickOverlay.BorderSizePixel = 0
+				clickOverlay.Size = UDim2.fromScale(1, 1)
+				clickOverlay.Parent = contentHolder
+
+				-- Hover effect
+				local function ChangeState(State)
+					if State == "Hover" then
+						Tween(contentHolder, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+							BackgroundTransparency = 0.7
+						}):Play()
+						Tween(lockIcon, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+							TextTransparency = 0.1
+						}):Play()
+						Tween(premiumText, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+							TextTransparency = 0.2
+						}):Play()
+					else
+						Tween(contentHolder, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+							BackgroundTransparency = 0.8
+						}):Play()
+						Tween(lockIcon, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+							TextTransparency = 0.3
+						}):Play()
+						Tween(premiumText, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+							TextTransparency = 0.4
+						}):Play()
+					end
+				end
+
+				clickOverlay.MouseEnter:Connect(function()
+					ChangeState("Hover")
+				end)
+				clickOverlay.MouseLeave:Connect(function()
+					ChangeState("Default")
+				end)
+
+				clickOverlay.MouseButton1Click:Connect(function()
+					if Settings.Callback then
+						Settings.Callback()
+					end
+				end)
+
+				function LockedSectionFunctions:SetVisibility(State)
+					lockedSection.Visible = State
+				end
+
+				return LockedSectionFunctions
 			end
 
 			local function SelectCurrentTab()
