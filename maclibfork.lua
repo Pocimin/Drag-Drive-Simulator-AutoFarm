@@ -4593,12 +4593,93 @@ function MacLib:Window(Settings)
 					end
 					function SpacerFunctions:SetVisibility(State)
 						spacer.Visible = State
-					end
 
 					return SpacerFunctions
 				end
 
 				return SectionFunctions
+			end
+
+			-- NZNT: Locked Section (Premium only - shows lock overlay)
+			function TabFunctions:LockedSection(Settings)
+				local LockedSectionFunctions = {}
+				local section = Instance.new("Frame")
+				section.Name = "LockedSection"
+				section.AutomaticSize = Enum.AutomaticSize.Y
+				section.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+				section.BackgroundTransparency = 0.85
+				section.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				section.BorderSizePixel = 0
+				section.Position = UDim2.fromScale(0, 6.78e-08)
+				section.Size = UDim2.fromScale(1, 0)
+				section.ClipsDescendants = true
+				section.Parent = left
+
+				local sectionUICorner = Instance.new("UICorner")
+				sectionUICorner.Name = "SectionUICorner"
+				sectionUICorner.Parent = section
+
+				local sectionUIStroke = Instance.new("UIStroke")
+				sectionUIStroke.Name = "SectionUIStroke"
+				sectionUIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+				sectionUIStroke.Color = Color3.fromRGB(255, 255, 255)
+				sectionUIStroke.Transparency = 0.9
+				sectionUIStroke.Parent = section
+
+				-- Lock icon
+				local lockIcon = Instance.new("ImageLabel")
+				lockIcon.Name = "LockIcon"
+				lockIcon.Image = "rbxassetid://10734950087" -- Lock icon
+				lockIcon.ImageColor3 = Color3.fromRGB(200, 200, 200)
+				lockIcon.BackgroundTransparency = 1
+				lockIcon.Size = UDim2.fromOffset(40, 40)
+				lockIcon.Position = UDim2.new(0.5, -20, 0, 30)
+				lockIcon.Parent = section
+
+				-- Title text
+				local titleText = Instance.new("TextLabel")
+				titleText.Name = "TitleText"
+				titleText.FontFace = Font.new(
+					assets.interFont,
+					Enum.FontWeight.Bold,
+					Enum.FontStyle.Normal
+				)
+				titleText.Text = Settings.Name or "Premium Feature"
+				titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+				titleText.TextSize = 18
+				titleText.TextTransparency = 0.3
+				titleText.BackgroundTransparency = 1
+				titleText.Size = UDim2.new(1, 0, 0, 25)
+				titleText.Position = UDim2.new(0, 0, 0, 75)
+				titleText.Parent = section
+
+				-- Premium message
+				local premiumText = Instance.new("TextLabel")
+				premiumText.Name = "PremiumText"
+				premiumText.FontFace = Font.new(
+					assets.interFont,
+					Enum.FontWeight.Medium,
+					Enum.FontStyle.Normal
+				)
+				premiumText.Text = " Purchase Premium to unlock!"
+				premiumText.TextColor3 = Color3.fromRGB(255, 215, 0)
+				premiumText.TextSize = 14
+				premiumText.TextTransparency = 0.2
+				premiumText.BackgroundTransparency = 1
+				premiumText.Size = UDim2.new(1, 0, 0, 20)
+				premiumText.Position = UDim2.new(0, 0, 0, 100)
+				premiumText.Parent = section
+
+				-- Set minimum height
+				local sectionUIPadding = Instance.new("UIPadding")
+				sectionUIPadding.Name = "SectionUIPadding"
+				sectionUIPadding.PaddingBottom = UDim.new(0, 20)
+				sectionUIPadding.PaddingLeft = UDim.new(0, 20)
+				sectionUIPadding.PaddingRight = UDim.new(0, 18)
+				sectionUIPadding.PaddingTop = UDim.new(0, 130)
+				sectionUIPadding.Parent = section
+
+				return LockedSectionFunctions
 			end
 
 			local function SelectCurrentTab()
