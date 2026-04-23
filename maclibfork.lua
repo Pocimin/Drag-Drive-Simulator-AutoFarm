@@ -4607,7 +4607,7 @@ function MacLib:Window(Settings)
 				local section = Instance.new("Frame")
 				section.Name = "LockedSection"
 				section.AutomaticSize = Enum.AutomaticSize.Y
-				section.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+				section.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				section.BackgroundTransparency = 0.85
 				section.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				section.BorderSizePixel = 0
@@ -4627,14 +4627,21 @@ function MacLib:Window(Settings)
 				sectionUIStroke.Transparency = 0.9
 				sectionUIStroke.Parent = section
 
+				local sectionUIListLayout = Instance.new("UIListLayout")
+				sectionUIListLayout.Name = "SectionUIListLayout"
+				sectionUIListLayout.Padding = UDim.new(0, 10)
+				sectionUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+				sectionUIListLayout.Parent = section
+
 				-- Lock icon
 				local lockIcon = Instance.new("ImageLabel")
 				lockIcon.Name = "LockIcon"
 				lockIcon.Image = "rbxassetid://10734950087" -- Lock icon
 				lockIcon.ImageColor3 = Color3.fromRGB(200, 200, 200)
+				lockIcon.ImageTransparency = 0.3
 				lockIcon.BackgroundTransparency = 1
 				lockIcon.Size = UDim2.fromOffset(40, 40)
-				lockIcon.Position = UDim2.new(0.5, -20, 0, 30)
+				lockIcon.LayoutOrder = 0
 				lockIcon.Parent = section
 
 				-- Title text
@@ -4647,11 +4654,12 @@ function MacLib:Window(Settings)
 				)
 				titleText.Text = Settings.Name or "Premium Feature"
 				titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				titleText.TextSize = 18
+				titleText.TextSize = 16
 				titleText.TextTransparency = 0.3
+				titleText.TextWrapped = true
 				titleText.BackgroundTransparency = 1
-				titleText.Size = UDim2.new(1, 0, 0, 25)
-				titleText.Position = UDim2.new(0, 0, 0, 75)
+				titleText.Size = UDim2.new(1, 0, 0, 20)
+				titleText.LayoutOrder = 1
 				titleText.Parent = section
 
 				-- Premium message
@@ -4662,13 +4670,14 @@ function MacLib:Window(Settings)
 					Enum.FontWeight.Medium,
 					Enum.FontStyle.Normal
 				)
-				premiumText.Text = " Purchase Premium to unlock!"
+				premiumText.Text = "Purchase Premium to unlock!"
 				premiumText.TextColor3 = Color3.fromRGB(255, 215, 0)
-				premiumText.TextSize = 14
+				premiumText.TextSize = 13
 				premiumText.TextTransparency = 0.2
+				premiumText.TextWrapped = true
 				premiumText.BackgroundTransparency = 1
-				premiumText.Size = UDim2.new(1, 0, 0, 20)
-				premiumText.Position = UDim2.new(0, 0, 0, 100)
+				premiumText.Size = UDim2.new(1, 0, 0, 18)
+				premiumText.LayoutOrder = 2
 				premiumText.Parent = section
 
 				-- Set minimum height
@@ -4677,7 +4686,7 @@ function MacLib:Window(Settings)
 				sectionUIPadding.PaddingBottom = UDim.new(0, 20)
 				sectionUIPadding.PaddingLeft = UDim.new(0, 20)
 				sectionUIPadding.PaddingRight = UDim.new(0, 18)
-				sectionUIPadding.PaddingTop = UDim.new(0, 130)
+				sectionUIPadding.PaddingTop = UDim.new(0, 22)
 				sectionUIPadding.Parent = section
 
 				return LockedSectionFunctions
