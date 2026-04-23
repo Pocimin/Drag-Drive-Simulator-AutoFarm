@@ -37,7 +37,7 @@ task.wait(2)
 
 -- SETTINGS
 local AutofarmEnabled = true
-local NoclipEnabled = false
+local NoclipEnabled = true  -- Always enabled
 
 local Player = game.Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
@@ -179,15 +179,11 @@ local function shouldClick(playerCursor, targetZone)
     return cursorCenter > (targetCenter + 10)
 end
 
--- Main solver loop (optimized - runs every 0.1s instead of every frame)
-local lastClick = 0
+-- Main solver loop (uses MouseButton1Down method)
 local function solve()
-    if tick() - lastClick < 0.05 then return end -- throttle clicks
-    
     local minigameFrame = findMinigameGui()
     if not minigameFrame then
         if connection then connection:Disconnect() end
-        connection = nil
         isRunning = false
         return
     end
@@ -195,69 +191,59 @@ local function solve()
     local tapZone = minigameFrame:FindFirstChild("TapZone")
     local targetZone = minigameFrame:FindFirstChild("TargetZone", true)
     local playerCursor = findPlayerCursor(minigameFrame)
+    local progressBar = minigameFrame:FindFirstChild("ProgressBar", true)
     
     if not tapZone or not targetZone or not playerCursor then return end
     
-    local tapButton = tapZone:FindFirstChildWhichIsA("GuiButton", true)
-    if not tapButton then
-        tapButton = tapZone:FindFirstChildWhichIsA("TextButton", true)
+    local tapButton = nil
+    for _, child in ipairs(tapZone:GetDescendants()) do
+        if child:IsA("GuiButton") or child:IsA("TextButton") or child:IsA("ImageButton") then
+            tapButton = child
+            break
+        end
     end
-    if not tapButton then
-        tapButton = tapZone:FindFirstChildWhichIsA("ImageButton", true)
+    if not tapButton and (tapZone:IsA("GuiButton") or tapZone:IsA("TextButton") or tapZone:IsA("ImageButton")) then
+        tapButton = tapZone
     end
-    
     if not tapButton then return end
     
     if shouldClick(playerCursor, targetZone) then
-        lastClick = tick()
         pcall(function()
-            for _, conn in pairs(getconnections(tapButton.MouseButton1Click)) do
+            for _, conn in pairs(getconnections(tapButton.MouseButton1Down)) do
                 conn:Fire()
             end
         end)
     end
     
-    local progressBar = minigameFrame:FindFirstChild("ProgressBar", true)
     if progressBar and progressBar.Size.X.Scale >= 0.99 then
+        print("[Minigame Solver] Complete!")
         if connection then connection:Disconnect() end
-        connection = nil
         isRunning = false
     end
 end
 
 local function start()
     if isRunning then return end
-    
-    print("[Minigame Solver] Waiting for minigame...")
     isRunning = true
-    
     local attempts = 0
     while not findMinigameGui() and attempts < 100 do
         task.wait(0.1)
         attempts = attempts + 1
     end
-    
     if not findMinigameGui() then
-        print("[Minigame Solver] Not found")
         isRunning = false
         return
     end
-    
-    print("[Minigame Solver] Solving!")
+    print("[Minigame Solver] Running...")
     connection = RunService.Heartbeat:Connect(solve)
 end
 
--- Minigame solver monitor (with cleanup)
-local solverMonitor = nil
-local function startSolverMonitor()
-    if solverMonitor then solverMonitor:Disconnect() end
-    solverMonitor = RunService.Heartbeat:Connect(function()
-        if not isRunning and findMinigameGui() then
-            startSolver()
-        end
-    end)
-end
-startSolverMonitor()
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if not isRunning and findMinigameGui() then start() end
+    end
+end)
 
 print("[Minigame Solver] Ready!")
 
@@ -426,6 +412,67 @@ local function WalkTo(position, speed)
 end
 
 -- =====================
+-- AUTO-SERVE CHECK
+-- =====================
+local function hasItemInHand()
+    -- Check if player is holding an item (tool in character)
+    for _, tool in ipairs(Character:GetChildren()) do
+        if tool:IsA("Tool") then
+            return true, tool
+        end
+    end
+    -- Check backpack
+    local backpack = Player:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                -- Common barista item names
+                local name = tool.Name:lower()
+                if name:find("coffee") or name:find("latte") or name:find("cappuccino") 
+                   or name:find("espresso") or name:find("mocha") or name:find("drink")
+                   or name:find("cup") or name:find("mug") or name:find("glass") then
+                    return true, tool
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function isBrewingComplete()
+    -- Check GUI indicators for brewing completion
+    for _, gui in ipairs(Player.PlayerGui:GetChildren()) do
+        -- Look for completion indicators
+        for _, element in ipairs(gui:GetDescendants()) do
+            if element:IsA("TextLabel") or element:IsA("TextButton") then
+                local text = element.Text:lower()
+                if (text:find("ready") or text:find("done") or text:find("complete") 
+                    or text:find("finished") or text:find("serve")) and element.Visible then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function autoServeIfReady()
+    local hasItem, item = hasItemInHand()
+    local brewingDone = isBrewingComplete()
+    
+    if hasItem or brewingDone then
+        print("[Auto-Serve] Item ready, serving...")
+        -- Find serve position and serve
+        local servePos = Vector3.new(-4995.79, 4.29, -759.78)
+        WalkTo(servePos, 16)
+        task.wait(0.3)
+        PressKeyE(1.5)
+        return true
+    end
+    return false
+end
+
+-- =====================
 -- MACHINE CHECK
 -- =====================
 local function CheckMachineBroke()
@@ -459,6 +506,10 @@ end
 -- AUTOFARM
 -- =====================
 local function RunAutofarm()
+    -- Enable noclip immediately
+    setNoclip(true)
+    print("[Autofarm] Noclip enabled")
+    
     -- Join team first
     joinBaristaTeam()
     
@@ -519,6 +570,9 @@ local function RunAutofarm()
     while AutofarmEnabled do
         -- Send webhook if enabled
         sendWebhook()
+        
+        -- Auto-serve check - always serve if holding item or brewing done
+        autoServeIfReady()
         
         if CheckMachineBroke() then
             RepairMachine()
