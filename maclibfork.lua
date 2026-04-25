@@ -4773,6 +4773,207 @@ function MacLib:Window(Settings)
 			return TabFunctions
 		end
 
+		-- NZNT: Locked Section (Premium only - shows lock overlay)
+		function TabFunctions:LockedSection(Settings)
+			local LockedSectionFunctions = {}
+			local section = Instance.new("Frame")
+			section.Name = "LockedSection"
+			section.AutomaticSize = Enum.AutomaticSize.Y
+			section.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			section.BackgroundTransparency = 0.98
+			section.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			section.BorderSizePixel = 0
+			section.Position = UDim2.fromScale(0, 6.78e-08)
+			section.Size = UDim2.fromScale(1, 0)
+			section.ClipsDescendants = true
+			section.Parent = left
+
+			local sectionUICorner = Instance.new("UICorner")
+			sectionUICorner.Name = "SectionUICorner"
+			sectionUICorner.Parent = section
+
+			local sectionUIStroke = Instance.new("UIStroke")
+			sectionUIStroke.Name = "SectionUIStroke"
+			sectionUIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			sectionUIStroke.Color = Color3.fromRGB(255, 255, 255)
+			sectionUIStroke.Transparency = 0.95
+			sectionUIStroke.Parent = section
+
+			local sectionUIListLayout = Instance.new("UIListLayout")
+			sectionUIListLayout.Name = "SectionUIListLayout"
+			sectionUIListLayout.Padding = UDim.new(0, 10)
+			sectionUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			sectionUIListLayout.Parent = section
+
+			local sectionUIPadding = Instance.new("UIPadding")
+			sectionUIPadding.Name = "SectionUIPadding"
+			sectionUIPadding.PaddingBottom = UDim.new(0, 20)
+			sectionUIPadding.PaddingLeft = UDim.new(0, 20)
+			sectionUIPadding.PaddingRight = UDim.new(0, 18)
+			sectionUIPadding.PaddingTop = UDim.new(0, 22)
+			sectionUIPadding.Parent = section
+
+			-- Dummy Label with section name
+			local dummyLabel = Instance.new("TextLabel")
+			dummyLabel.Name = "DummyLabel"
+			dummyLabel.FontFace = Font.new(assets.interFont)
+			dummyLabel.RichText = true
+			dummyLabel.Text = Settings.Name or "Premium Feature"
+			dummyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+			dummyLabel.TextSize = 12
+			dummyLabel.TextTransparency = 0.3
+			dummyLabel.TextWrapped = true
+			dummyLabel.TextXAlignment = Enum.TextXAlignment.Left
+			dummyLabel.AutomaticSize = Enum.AutomaticSize.Y
+			dummyLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			dummyLabel.BackgroundTransparency = 1
+			dummyLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			dummyLabel.BorderSizePixel = 0
+			dummyLabel.Size = UDim2.fromScale(1, 0)
+			dummyLabel.Parent = section
+
+			-- Dummy Subtitle
+			local dummySubtitle = Instance.new("TextLabel")
+			dummySubtitle.Name = "DummySubtitle"
+			dummySubtitle.FontFace = Font.new(assets.interFont)
+			dummySubtitle.Text = "Premium Autofarm"
+			dummySubtitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+			dummySubtitle.TextSize = 11
+			dummySubtitle.TextTransparency = 0.5
+			dummySubtitle.TextWrapped = true
+			dummySubtitle.TextXAlignment = Enum.TextXAlignment.Left
+			dummySubtitle.AutomaticSize = Enum.AutomaticSize.Y
+			dummySubtitle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			dummySubtitle.BackgroundTransparency = 1
+			dummySubtitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			dummySubtitle.BorderSizePixel = 0
+			dummySubtitle.Size = UDim2.fromScale(1, 0)
+			dummySubtitle.Parent = section
+
+			-- Dummy Description
+			local dummyDesc = Instance.new("TextLabel")
+			dummyDesc.Name = "DummyDesc"
+			dummyDesc.FontFace = Font.new(assets.interFont)
+			dummyDesc.Text = "Premium autofarm feature. Estimated earnings: 15-20m/h"
+			dummyDesc.TextColor3 = Color3.fromRGB(255, 255, 255)
+			dummyDesc.TextSize = 11
+			dummyDesc.TextTransparency = 0.6
+			dummyDesc.TextWrapped = true
+			dummyDesc.TextXAlignment = Enum.TextXAlignment.Left
+			dummyDesc.AutomaticSize = Enum.AutomaticSize.Y
+			dummyDesc.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			dummyDesc.BackgroundTransparency = 1
+			dummyDesc.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			dummyDesc.BorderSizePixel = 0
+			dummyDesc.Size = UDim2.fromScale(1, 0)
+			dummyDesc.Parent = section
+
+			-- Dummy Button
+			local dummyButton = Instance.new("TextButton")
+			dummyButton.Name = "DummyButton"
+			dummyButton.FontFace = Font.new(assets.interFont)
+			dummyButton.Text = "Load " .. (Settings.Name or "Feature") .. " (15-20m/h)"
+			dummyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+			dummyButton.TextSize = 13
+			dummyButton.TextTransparency = 0.3
+			dummyButton.AutoButtonColor = false
+			dummyButton.AutomaticSize = Enum.AutomaticSize.Y
+			dummyButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+			dummyButton.BackgroundTransparency = 0.3
+			dummyButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			dummyButton.BorderSizePixel = 0
+			dummyButton.Size = UDim2.fromScale(1, 0)
+			dummyButton.Parent = section
+
+			local dummyButtonPadding = Instance.new("UIPadding")
+			dummyButtonPadding.Name = "DummyButtonPadding"
+			dummyButtonPadding.PaddingBottom = UDim.new(0, 9)
+			dummyButtonPadding.PaddingLeft = UDim.new(0, 10)
+			dummyButtonPadding.PaddingRight = UDim.new(0, 10)
+			dummyButtonPadding.PaddingTop = UDim.new(0, 9)
+			dummyButtonPadding.Parent = dummyButton
+
+			local dummyButtonCorner = Instance.new("UICorner")
+			dummyButtonCorner.Name = "DummyButtonCorner"
+			dummyButtonCorner.CornerRadius = UDim.new(0, 10)
+			dummyButtonCorner.Parent = dummyButton
+
+			-- Arrow icon for button
+			local dummyArrow = Instance.new("ImageLabel")
+			dummyArrow.Name = "DummyArrow"
+			dummyArrow.Image = "rbxassetid://10734961991"
+			dummyArrow.ImageColor3 = Color3.fromRGB(255, 255, 255)
+			dummyArrow.ImageTransparency = 0.3
+			dummyArrow.BackgroundTransparency = 1
+			dummyArrow.AnchorPoint = Vector2.new(1, 0.5)
+			dummyArrow.Position = UDim2.new(1, -5, 0.5, 0)
+			dummyArrow.Size = UDim2.fromOffset(16, 16)
+			dummyArrow.Parent = dummyButton
+
+			-- Black overlay that covers everything
+			local overlay = Instance.new("Frame")
+			overlay.Name = "Overlay"
+			overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+			overlay.BackgroundTransparency = 0.5
+			overlay.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			overlay.BorderSizePixel = 0
+			overlay.Size = UDim2.fromScale(1, 1)
+			overlay.ZIndex = 10
+			overlay.Parent = section
+
+			local overlayCorner = Instance.new("UICorner")
+			overlayCorner.Name = "OverlayCorner"
+			overlayCorner.Parent = overlay
+
+			-- Center container for lock icon and text
+			local centerContainer = Instance.new("Frame")
+			centerContainer.Name = "CenterContainer"
+			centerContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+			centerContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			centerContainer.BackgroundTransparency = 1
+			centerContainer.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			centerContainer.BorderSizePixel = 0
+			centerContainer.Position = UDim2.fromScale(0.5, 0.5)
+			centerContainer.Size = UDim2.fromOffset(200, 80)
+			centerContainer.ZIndex = 11
+			centerContainer.Parent = overlay
+
+			-- Lock icon
+			local lockIcon = Instance.new("ImageLabel")
+			lockIcon.Name = "LockIcon"
+			lockIcon.Image = "rbxassetid://10734950087"
+			lockIcon.ImageColor3 = Color3.fromRGB(255, 215, 0)
+			lockIcon.ImageTransparency = 0
+			lockIcon.BackgroundTransparency = 1
+			lockIcon.AnchorPoint = Vector2.new(0.5, 0)
+			lockIcon.Position = UDim2.new(0.5, 0, 0, 0)
+			lockIcon.Size = UDim2.fromOffset(40, 40)
+			lockIcon.ZIndex = 12
+			lockIcon.Parent = centerContainer
+
+			-- Premium message
+			local premiumText = Instance.new("TextLabel")
+			premiumText.Name = "PremiumText"
+			premiumText.FontFace = Font.new(
+				assets.interFont,
+				Enum.FontWeight.Bold,
+				Enum.FontStyle.Normal
+			)
+			premiumText.Text = "Purchase Premium to unlock!"
+			premiumText.TextColor3 = Color3.fromRGB(255, 215, 0)
+			premiumText.TextSize = 14
+			premiumText.TextTransparency = 0
+			premiumText.TextWrapped = true
+			premiumText.BackgroundTransparency = 1
+			premiumText.AnchorPoint = Vector2.new(0.5, 1)
+			premiumText.Position = UDim2.new(0.5, 0, 1, 0)
+			premiumText.Size = UDim2.new(1, 0, 0, 20)
+			premiumText.ZIndex = 12
+			premiumText.Parent = centerContainer
+
+			return LockedSectionFunctions
+		end
+
 		return SectionFunctions
 	end
 
