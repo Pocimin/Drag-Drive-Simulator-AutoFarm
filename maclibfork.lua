@@ -4640,6 +4640,10 @@ function MacLib:Window(Settings)
 				SelectCurrentTab()
 			end)
 
+			function TabFunctions:Select()
+				SelectCurrentTab()
+			end
+
 			function TabFunctions:InsertConfigSection(Side)
 				local configSection = TabFunctions:Section({ Side = "Left" })
 
