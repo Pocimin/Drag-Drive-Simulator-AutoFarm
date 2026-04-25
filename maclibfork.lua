@@ -4598,7 +4598,10 @@ function MacLib:Window(Settings)
 					return SpacerFunctions
 				end
 
-				local easetime = 0.25
+				return SectionFunctions
+			end
+
+			local easetime = 0.25
 				local currentTabInstance = nil
 
 				local function SelectCurrentTab()
@@ -4615,6 +4618,27 @@ function MacLib:Window(Settings)
 							Tween(tabInfo.tabStroke, TweenInfo.new(easetime, Enum.EasingStyle.Sine), {
 								Transparency = (i == tabSwitcher and 0.95 or 1)
 							}):Play()
+						end
+						if tabInfo.switcherImage then
+							Tween(tabInfo.switcherImage, TweenInfo.new(easetime, Enum.EasingStyle.Sine), {
+								ImageTransparency = (i == tabSwitcher and 0.1 or 0.5)
+							}):Play()
+						end
+						if tabInfo.switcherName then
+							Tween(tabInfo.switcherName, TweenInfo.new(easetime, Enum.EasingStyle.Sine), {
+								TextTransparency = (i == tabSwitcher and 0.1 or 0.5)
+							}):Play()
+						end
+					end
+
+					tabs[tabSwitcher].tabContent.Parent = content
+					currentTabInstance = tabs[tabSwitcher].tabContent
+					currentTab.Text = Settings.Name
+				end
+
+				tabSwitcher.MouseButton1Click:Connect(function()
+					SelectCurrentTab()
+				end)
 
 			function TabFunctions:InsertConfigSection(Side)
 				local configSection = TabFunctions:Section({ Side = "Left" })
