@@ -4596,6 +4596,8 @@ function MacLib:Window(Settings)
 					end
 
 					return SpacerFunctions
+				end
+
 				if currentTabInstance then
 					currentTabInstance.Parent = nil
 				end
