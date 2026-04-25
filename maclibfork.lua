@@ -4602,14 +4602,14 @@ function MacLib:Window(Settings)
 			end
 
 			local easetime = 0.25
-			local currentTabInstance = nil
 
 			local function SelectCurrentTab()
-				if currentTabInstance then
-					currentTabInstance.Parent = nil
-				end
-
 				for i, tabInfo in pairs(tabs) do
+					if i ~= tabSwitcher and tabInfo.tabContent then
+						tabInfo.tabContent.Parent = nil
+						tabInfo.tabContent.Visible = false
+					end
+
 					Tween(i, TweenInfo.new(easetime, Enum.EasingStyle.Sine), {
 						BackgroundTransparency = (i == tabSwitcher and 0.98 or 1)
 					}):Play()
@@ -4631,8 +4631,10 @@ function MacLib:Window(Settings)
 					end
 				end
 
-				tabs[tabSwitcher].tabContent.Parent = content
-				currentTabInstance = tabs[tabSwitcher].tabContent
+				local selectedContent = tabs[tabSwitcher].tabContent
+				selectedContent.Visible = true
+				selectedContent.Parent = content
+				currentTabInstance = selectedContent
 				currentTab.Text = Settings.Name
 			end
 
@@ -4772,9 +4774,35 @@ function MacLib:Window(Settings)
 				end
 			end
 
-			-- NZNT: Locked Section (Premium only - shows lock overlay)
+			-- NZNT: Locked Section (Premium only - normal dummy section with overlay)
 			function TabFunctions:LockedSection(Settings)
+				Settings = Settings or {}
 				local LockedSectionFunctions = {}
+				local featureName = Settings.Name or "Premium Autofarm"
+
+				local presets = {
+					["Drag Autofarm"] = {
+						ParagraphHeader = "Drag Race Autofarm",
+						Body = "Drag race autofarm for Surakarta map only. Estimated earnings: 12-15m/h",
+						Button = "Load Drag Autofarm (12-15m/h)"
+					},
+					["Mandalika GP Autofarm"] = {
+						ParagraphHeader = "Mandalika GP",
+						Body = "Mandalika GP autofarm for premium users. Estimated earnings: 15-20m/h",
+						Button = "Load Mandalika GP Autofarm (15-20m/h)"
+					},
+					["Office Autofarm"] = {
+						ParagraphHeader = "Office Autofarm",
+						Body = "Office autofarm for premium users. Estimated earnings: 10-15m/h",
+						Button = "Load Office Autofarm (10-15m/h)"
+					}
+				}
+
+				local preset = presets[featureName] or {}
+				local paragraphHeaderText = Settings.ParagraphHeader or Settings.Header or preset.ParagraphHeader or featureName
+				local paragraphBodyText = Settings.Body or preset.Body or "Premium autofarm feature. Estimated earnings: 15-20m/h"
+				local buttonText = Settings.Button or Settings.ButtonName or preset.Button or ("Load " .. featureName .. " (Premium)")
+
 				local section = Instance.new("Frame")
 				section.Name = "LockedSection"
 				section.AutomaticSize = Enum.AutomaticSize.Y
@@ -4798,11 +4826,19 @@ function MacLib:Window(Settings)
 				sectionUIStroke.Transparency = 0.95
 				sectionUIStroke.Parent = section
 
+				local contentHolder = Instance.new("Frame")
+				contentHolder.Name = "LockedContent"
+				contentHolder.AutomaticSize = Enum.AutomaticSize.Y
+				contentHolder.BackgroundTransparency = 1
+				contentHolder.BorderSizePixel = 0
+				contentHolder.Size = UDim2.fromScale(1, 0)
+				contentHolder.Parent = section
+
 				local sectionUIListLayout = Instance.new("UIListLayout")
 				sectionUIListLayout.Name = "SectionUIListLayout"
 				sectionUIListLayout.Padding = UDim.new(0, 10)
 				sectionUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-				sectionUIListLayout.Parent = section
+				sectionUIListLayout.Parent = contentHolder
 
 				local sectionUIPadding = Instance.new("UIPadding")
 				sectionUIPadding.Name = "SectionUIPadding"
@@ -4810,165 +4846,202 @@ function MacLib:Window(Settings)
 				sectionUIPadding.PaddingLeft = UDim.new(0, 20)
 				sectionUIPadding.PaddingRight = UDim.new(0, 18)
 				sectionUIPadding.PaddingTop = UDim.new(0, 22)
-				sectionUIPadding.Parent = section
+				sectionUIPadding.Parent = contentHolder
 
-				-- Dummy Label with section name
-				local dummyLabel = Instance.new("TextLabel")
-				dummyLabel.Name = "DummyLabel"
-				dummyLabel.FontFace = Font.new(assets.interFont)
-				dummyLabel.RichText = true
-				dummyLabel.Text = Settings.Name or "Premium Feature"
-				dummyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-				dummyLabel.TextSize = 12
-				dummyLabel.TextTransparency = 0.3
-				dummyLabel.TextWrapped = true
-				dummyLabel.TextXAlignment = Enum.TextXAlignment.Left
-				dummyLabel.AutomaticSize = Enum.AutomaticSize.Y
-				dummyLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				dummyLabel.BackgroundTransparency = 1
-				dummyLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
-				dummyLabel.BorderSizePixel = 0
-				dummyLabel.Size = UDim2.fromScale(1, 0)
-				dummyLabel.Parent = section
+				local header = Instance.new("Frame")
+				header.Name = "Header"
+				header.AutomaticSize = Enum.AutomaticSize.Y
+				header.BackgroundTransparency = 1
+				header.BorderSizePixel = 0
+				header.LayoutOrder = 0
+				header.Size = UDim2.fromScale(1, 0)
+				header.Parent = contentHolder
 
-				-- Dummy Subtitle
-				local dummySubtitle = Instance.new("TextLabel")
-				dummySubtitle.Name = "DummySubtitle"
-				dummySubtitle.FontFace = Font.new(assets.interFont)
-				dummySubtitle.Text = "Premium Autofarm"
-				dummySubtitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-				dummySubtitle.TextSize = 11
-				dummySubtitle.TextTransparency = 0.5
-				dummySubtitle.TextWrapped = true
-				dummySubtitle.TextXAlignment = Enum.TextXAlignment.Left
-				dummySubtitle.AutomaticSize = Enum.AutomaticSize.Y
-				dummySubtitle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				dummySubtitle.BackgroundTransparency = 1
-				dummySubtitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
-				dummySubtitle.BorderSizePixel = 0
-				dummySubtitle.Size = UDim2.fromScale(1, 0)
-				dummySubtitle.Parent = section
+				local headerPadding = Instance.new("UIPadding")
+				headerPadding.Name = "UIPadding"
+				headerPadding.PaddingBottom = UDim.new(0, 5)
+				headerPadding.Parent = header
 
-				-- Dummy Description
-				local dummyDesc = Instance.new("TextLabel")
-				dummyDesc.Name = "DummyDesc"
-				dummyDesc.FontFace = Font.new(assets.interFont)
-				dummyDesc.Text = "Premium autofarm feature. Estimated earnings: 15-20m/h"
-				dummyDesc.TextColor3 = Color3.fromRGB(255, 255, 255)
-				dummyDesc.TextSize = 11
-				dummyDesc.TextTransparency = 0.6
-				dummyDesc.TextWrapped = true
-				dummyDesc.TextXAlignment = Enum.TextXAlignment.Left
-				dummyDesc.AutomaticSize = Enum.AutomaticSize.Y
-				dummyDesc.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				dummyDesc.BackgroundTransparency = 1
-				dummyDesc.BorderColor3 = Color3.fromRGB(0, 0, 0)
-				dummyDesc.BorderSizePixel = 0
-				dummyDesc.Size = UDim2.fromScale(1, 0)
-				dummyDesc.Parent = section
+				local headerText = Instance.new("TextLabel")
+				headerText.Name = "HeaderText"
+				headerText.FontFace = Font.new(assets.interFont, Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+				headerText.RichText = true
+				headerText.Text = featureName
+				headerText.TextColor3 = Color3.fromRGB(255, 255, 255)
+				headerText.TextSize = 16
+				headerText.TextTransparency = 0.3
+				headerText.TextWrapped = true
+				headerText.TextXAlignment = Enum.TextXAlignment.Left
+				headerText.AutomaticSize = Enum.AutomaticSize.Y
+				headerText.BackgroundTransparency = 1
+				headerText.BorderSizePixel = 0
+				headerText.Size = UDim2.fromScale(1, 0)
+				headerText.Parent = header
 
-				-- Dummy Button
-				local dummyButton = Instance.new("TextButton")
-				dummyButton.Name = "DummyButton"
-				dummyButton.FontFace = Font.new(assets.interFont)
-				dummyButton.Text = "Load " .. (Settings.Name or "Feature") .. " (15-20m/h)"
-				dummyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-				dummyButton.TextSize = 13
-				dummyButton.TextTransparency = 0.3
-				dummyButton.AutoButtonColor = false
-				dummyButton.AutomaticSize = Enum.AutomaticSize.Y
-				dummyButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-				dummyButton.BackgroundTransparency = 0.3
-				dummyButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
-				dummyButton.BorderSizePixel = 0
-				dummyButton.Size = UDim2.fromScale(1, 0)
-				dummyButton.Parent = section
+				local paragraph = Instance.new("Frame")
+				paragraph.Name = "Paragraph"
+				paragraph.AutomaticSize = Enum.AutomaticSize.Y
+				paragraph.BackgroundTransparency = 1
+				paragraph.BorderSizePixel = 0
+				paragraph.Size = UDim2.new(1, 0, 0, 38)
+				paragraph.Parent = contentHolder
 
-				local dummyButtonPadding = Instance.new("UIPadding")
-				dummyButtonPadding.Name = "DummyButtonPadding"
-				dummyButtonPadding.PaddingBottom = UDim.new(0, 9)
-				dummyButtonPadding.PaddingLeft = UDim.new(0, 10)
-				dummyButtonPadding.PaddingRight = UDim.new(0, 10)
-				dummyButtonPadding.PaddingTop = UDim.new(0, 9)
-				dummyButtonPadding.Parent = dummyButton
+				local paragraphLayout = Instance.new("UIListLayout")
+				paragraphLayout.Name = "UIListLayout"
+				paragraphLayout.Padding = UDim.new(0, 5)
+				paragraphLayout.SortOrder = Enum.SortOrder.LayoutOrder
+				paragraphLayout.Parent = paragraph
 
-				local dummyButtonCorner = Instance.new("UICorner")
-				dummyButtonCorner.Name = "DummyButtonCorner"
-				dummyButtonCorner.CornerRadius = UDim.new(0, 10)
-				dummyButtonCorner.Parent = dummyButton
+				local paragraphHeader = Instance.new("TextLabel")
+				paragraphHeader.Name = "ParagraphHeader"
+				paragraphHeader.FontFace = Font.new(assets.interFont, Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+				paragraphHeader.RichText = true
+				paragraphHeader.Text = paragraphHeaderText
+				paragraphHeader.TextColor3 = Color3.fromRGB(255, 255, 255)
+				paragraphHeader.TextSize = 15
+				paragraphHeader.TextTransparency = 0.4
+				paragraphHeader.TextWrapped = true
+				paragraphHeader.TextXAlignment = Enum.TextXAlignment.Left
+				paragraphHeader.AutomaticSize = Enum.AutomaticSize.Y
+				paragraphHeader.BackgroundTransparency = 1
+				paragraphHeader.BorderSizePixel = 0
+				paragraphHeader.Size = UDim2.fromScale(1, 0)
+				paragraphHeader.Parent = paragraph
 
-				-- Arrow icon for button
-				local dummyArrow = Instance.new("ImageLabel")
-				dummyArrow.Name = "DummyArrow"
-				dummyArrow.Image = "rbxassetid://10734961991"
-				dummyArrow.ImageColor3 = Color3.fromRGB(255, 255, 255)
-				dummyArrow.ImageTransparency = 0.3
-				dummyArrow.BackgroundTransparency = 1
-				dummyArrow.AnchorPoint = Vector2.new(1, 0.5)
-				dummyArrow.Position = UDim2.new(1, -5, 0.5, 0)
-				dummyArrow.Size = UDim2.fromOffset(16, 16)
-				dummyArrow.Parent = dummyButton
+				local paragraphBody = Instance.new("TextLabel")
+				paragraphBody.Name = "ParagraphBody"
+				paragraphBody.FontFace = Font.new(assets.interFont)
+				paragraphBody.RichText = true
+				paragraphBody.Text = paragraphBodyText
+				paragraphBody.TextColor3 = Color3.fromRGB(255, 255, 255)
+				paragraphBody.TextSize = 13
+				paragraphBody.TextTransparency = 0.5
+				paragraphBody.TextWrapped = true
+				paragraphBody.TextXAlignment = Enum.TextXAlignment.Left
+				paragraphBody.AutomaticSize = Enum.AutomaticSize.Y
+				paragraphBody.BackgroundTransparency = 1
+				paragraphBody.BorderSizePixel = 0
+				paragraphBody.LayoutOrder = 1
+				paragraphBody.Size = UDim2.fromScale(1, 0)
+				paragraphBody.Parent = paragraph
 
-				-- Black overlay that covers everything
+				local button = Instance.new("Frame")
+				button.Name = "Button"
+				button.AutomaticSize = Enum.AutomaticSize.Y
+				button.BackgroundTransparency = 1
+				button.BorderSizePixel = 0
+				button.Size = UDim2.new(1, 0, 0, 38)
+				button.Parent = contentHolder
+
+				local buttonInteract = Instance.new("TextButton")
+				buttonInteract.Name = "ButtonInteract"
+				buttonInteract.FontFace = Font.new(assets.interFont)
+				buttonInteract.RichText = true
+				buttonInteract.Text = buttonText
+				buttonInteract.TextColor3 = Color3.fromRGB(255, 255, 255)
+				buttonInteract.TextSize = 13
+				buttonInteract.TextTransparency = 0.5
+				buttonInteract.TextTruncate = Enum.TextTruncate.AtEnd
+				buttonInteract.TextXAlignment = Enum.TextXAlignment.Left
+				buttonInteract.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				buttonInteract.BackgroundTransparency = 1
+				buttonInteract.BorderSizePixel = 0
+				buttonInteract.Size = UDim2.fromScale(1, 1)
+				buttonInteract.AutoButtonColor = false
+				buttonInteract.Active = false
+				buttonInteract.Parent = button
+
+				local buttonCorner = Instance.new("UICorner")
+				buttonCorner.Name = "ButtonCorner"
+				buttonCorner.CornerRadius = UDim.new(0, 8)
+				buttonCorner.Parent = buttonInteract
+
+				local buttonStroke = Instance.new("UIStroke")
+				buttonStroke.Name = "ButtonStroke"
+				buttonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+				buttonStroke.Color = Color3.fromRGB(255, 255, 255)
+				buttonStroke.Transparency = 0.9
+				buttonStroke.Parent = buttonInteract
+
+				local buttonUIPadding = Instance.new("UIPadding")
+				buttonUIPadding.Name = "ButtonUIPadding"
+				buttonUIPadding.PaddingLeft = UDim.new(0, 12)
+				buttonUIPadding.Parent = buttonInteract
+
+				local buttonImage = Instance.new("ImageLabel")
+				buttonImage.Name = "ButtonImage"
+				buttonImage.Image = assets.buttonImage
+				buttonImage.ImageTransparency = 0.5
+				buttonImage.AnchorPoint = Vector2.new(1, 0.5)
+				buttonImage.BackgroundTransparency = 1
+				buttonImage.BorderSizePixel = 0
+				buttonImage.Position = UDim2.fromScale(1, 0.5)
+				buttonImage.Size = UDim2.fromOffset(15, 15)
+				buttonImage.Parent = button
+
 				local overlay = Instance.new("Frame")
 				overlay.Name = "Overlay"
 				overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-				overlay.BackgroundTransparency = 0.5
-				overlay.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				overlay.BackgroundTransparency = 0.32
 				overlay.BorderSizePixel = 0
+				overlay.Position = UDim2.fromScale(0, 0)
 				overlay.Size = UDim2.fromScale(1, 1)
-				overlay.ZIndex = 10
+				overlay.ZIndex = 20
 				overlay.Parent = section
 
 				local overlayCorner = Instance.new("UICorner")
 				overlayCorner.Name = "OverlayCorner"
 				overlayCorner.Parent = overlay
 
-				-- Center container for lock icon and text
 				local centerContainer = Instance.new("Frame")
 				centerContainer.Name = "CenterContainer"
 				centerContainer.AnchorPoint = Vector2.new(0.5, 0.5)
-				centerContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				centerContainer.BackgroundTransparency = 1
-				centerContainer.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				centerContainer.BorderSizePixel = 0
 				centerContainer.Position = UDim2.fromScale(0.5, 0.5)
-				centerContainer.Size = UDim2.fromOffset(200, 80)
-				centerContainer.ZIndex = 11
+				centerContainer.Size = UDim2.fromOffset(230, 74)
+				centerContainer.ZIndex = 21
 				centerContainer.Parent = overlay
 
-				-- Lock icon
+				local centerLayout = Instance.new("UIListLayout")
+				centerLayout.Name = "CenterLayout"
+				centerLayout.Padding = UDim.new(0, 8)
+				centerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+				centerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+				centerLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+				centerLayout.Parent = centerContainer
+
 				local lockIcon = Instance.new("ImageLabel")
 				lockIcon.Name = "LockIcon"
 				lockIcon.Image = "rbxassetid://10734950087"
 				lockIcon.ImageColor3 = Color3.fromRGB(255, 215, 0)
-				lockIcon.ImageTransparency = 0
 				lockIcon.BackgroundTransparency = 1
-				lockIcon.AnchorPoint = Vector2.new(0.5, 0)
-				lockIcon.Position = UDim2.new(0.5, 0, 0, 0)
-				lockIcon.Size = UDim2.fromOffset(40, 40)
-				lockIcon.ZIndex = 12
+				lockIcon.BorderSizePixel = 0
+				lockIcon.Size = UDim2.fromOffset(34, 34)
+				lockIcon.ZIndex = 22
 				lockIcon.Parent = centerContainer
 
-				-- Premium message
 				local premiumText = Instance.new("TextLabel")
 				premiumText.Name = "PremiumText"
-				premiumText.FontFace = Font.new(
-					assets.interFont,
-					Enum.FontWeight.Bold,
-					Enum.FontStyle.Normal
-				)
-				premiumText.Text = "Purchase Premium to unlock!"
+				premiumText.FontFace = Font.new(assets.interFont, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+				premiumText.Text = "Buy premium to access!"
 				premiumText.TextColor3 = Color3.fromRGB(255, 215, 0)
-				premiumText.TextSize = 14
-				premiumText.TextTransparency = 0
+				premiumText.TextSize = 15
 				premiumText.TextWrapped = true
+				premiumText.TextXAlignment = Enum.TextXAlignment.Center
 				premiumText.BackgroundTransparency = 1
-				premiumText.AnchorPoint = Vector2.new(0.5, 1)
-				premiumText.Position = UDim2.new(0.5, 0, 1, 0)
-				premiumText.Size = UDim2.new(1, 0, 0, 20)
-				premiumText.ZIndex = 12
+				premiumText.BorderSizePixel = 0
+				premiumText.Size = UDim2.new(1, 0, 0, 22)
+				premiumText.ZIndex = 22
 				premiumText.Parent = centerContainer
+
+				function LockedSectionFunctions:SetVisibility(State)
+					section.Visible = State
+				end
+
+				function LockedSectionFunctions:Remove()
+					section:Destroy()
+				end
 
 				return LockedSectionFunctions
 			end
