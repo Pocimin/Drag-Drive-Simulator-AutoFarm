@@ -1,0 +1,846 @@
+-- ============================================
+-- nznt's hub | PREMIUM
+-- Drag Drive Simulator Suite
+-- Creator: _nznt
+-- Discord: discord.gg/q6dUF4CsKH
+-- ============================================
+-- Premium Version - NZNT UI (Rebranded Luna)
+-- ============================================
+
+-- ============================================
+-- LOADING SCREEN
+-- ============================================
+
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+
+-- Create loading screen
+local LoadingGui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+LoadingGui.Name = "NZNT_Loading"
+LoadingGui.DisplayOrder = 99999
+LoadingGui.ResetOnSpawn = false
+LoadingGui.IgnoreGuiInset = true
+
+-- Black background
+local Background = Instance.new("Frame", LoadingGui)
+Background.Size = UDim2.new(1, 0, 1, 0)
+Background.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Background.BorderSizePixel = 0
+
+-- Logo/Image (CHANGE THIS TO YOUR IMAGE)
+local Logo = Instance.new("ImageLabel", Background)
+Logo.Size = UDim2.new(0, 120, 0, 120)
+Logo.Position = UDim2.new(0.5, -60, 0.5, -80)
+Logo.BackgroundTransparency = 1
+Logo.Image = "rbxassetid://75353810328300" -- <-- CHANGE TO YOUR IMAGE ID
+Logo.ScaleType = Enum.ScaleType.Fit
+
+-- Loading text
+local LoadingText = Instance.new("TextLabel", Background)
+LoadingText.Size = UDim2.new(0, 200, 0, 30)
+LoadingText.Position = UDim2.new(0.5, -100, 0.5, 50)
+LoadingText.BackgroundTransparency = 1
+LoadingText.Text = "Loading Script..."
+LoadingText.TextColor3 = Color3.fromRGB(255, 215, 0) -- Gold for premium
+LoadingText.Font = Enum.Font.GothamBold
+LoadingText.TextSize = 16
+
+-- Loading bar container
+local BarContainer = Instance.new("Frame", Background)
+BarContainer.Size = UDim2.new(0, 250, 0, 6)
+BarContainer.Position = UDim2.new(0.5, -125, 0.5, 90)
+BarContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+BarContainer.BorderSizePixel = 0
+Instance.new("UICorner", BarContainer).CornerRadius = UDim.new(0, 3)
+
+-- Loading bar fill
+local BarFill = Instance.new("Frame", BarContainer)
+BarFill.Size = UDim2.new(0, 0, 1, 0)
+BarFill.BackgroundColor3 = Color3.fromRGB(255, 215, 0) -- Gold for premium
+BarFill.BorderSizePixel = 0
+Instance.new("UICorner", BarFill).CornerRadius = UDim.new(0, 3)
+
+-- Animate loading bar
+local function animateLoading()
+    -- Fill bar over 2 seconds
+    local tween = TweenService:Create(BarFill, TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.new(1, 0, 1, 0)
+    })
+    tween:Play()
+    
+    -- Fade out after loading
+    task.wait(2.5)
+    
+    local fadeTween = TweenService:Create(Background, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 1
+    })
+    fadeTween:Play()
+    
+    TweenService:Create(Logo, TweenInfo.new(0.5), {ImageTransparency = 1}):Play()
+    TweenService:Create(LoadingText, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+    TweenService:Create(BarContainer, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(BarFill, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+    
+    task.wait(0.5)
+    LoadingGui:Destroy()
+end
+
+task.spawn(animateLoading)
+
+-- ============================================
+-- Load NZNT UI (Rebranded Luna)
+-- ============================================
+local NZNT = loadstring(game:HttpGet("https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/nznt_ui_simple.lua", true))()
+if not NZNT then
+    warn("Failed to load NZNT UI!")
+    return
+end
+-- ============================================
+-- CONFIG & STATE
+-- ============================================
+local STABLE_URL = "https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/placeholder.lua"
+local BETA_URL = "https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/premium.lua"
+local OFFICE_URL = "https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/office_autofarm.lua"
+
+-- Speedhack state
+local SPEED_MULTIPLIER = 1.1
+local MAX_SPEED = 300
+local ENABLED = false
+local currentVehicle = nil
+local originalMaxSpeed = nil
+local connection = nil
+
+-- Webhook config
+local WEBHOOK_FILE = "nznt_webhook_config.json"
+local webhookUrl = ""
+local webhookInterval = 60
+local webhookEnabled = false
+
+-- ============================================
+-- WEBHOOK HELPERS
+-- ============================================
+local function saveWebhookConfig()
+    if not writefile then return end
+    pcall(function()
+        writefile(WEBHOOK_FILE, game:GetService("HttpService"):JSONEncode({
+            url = webhookUrl,
+            interval = webhookInterval,
+            enabled = webhookEnabled
+        }))
+    end)
+end
+
+local function loadWebhookConfig()
+    if not readfile then return end
+    local ok, content = pcall(function() return readfile(WEBHOOK_FILE) end)
+    if ok and content then
+        local ok2, data = pcall(function() return game:GetService("HttpService"):JSONDecode(content) end)
+        if ok2 and data then
+            webhookUrl = data.url or ""
+            webhookInterval = data.interval or 60
+            webhookEnabled = data.enabled or false
+        end
+    end
+end
+
+loadWebhookConfig()
+
+-- ============================================
+-- HELPERS
+-- ============================================
+local function getCurrentVehicle()
+    local char = game.Players.LocalPlayer.Character
+    if not char then return nil end
+    local hum = char:FindFirstChild("Humanoid")
+    if not hum or not hum.SeatPart then return nil end
+    return hum.SeatPart.Parent
+end
+
+local function applySpeedHack(vehicle)
+    if not vehicle then return end
+    local seat = vehicle:FindFirstChildWhichIsA("VehicleSeat")
+    if not seat then return end
+
+    if not originalMaxSpeed then
+        originalMaxSpeed = seat.MaxSpeed
+    end
+
+    seat.MaxSpeed = MAX_SPEED
+
+    if connection then connection:Disconnect() end
+
+    connection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not ENABLED then return end
+        if not seat or not seat.Parent then
+            connection:Disconnect()
+            return
+        end
+
+        local velocity = seat.AssemblyLinearVelocity
+        local speed = velocity.Magnitude
+
+        if speed > 5 and speed < MAX_SPEED then
+            local vehicleLookVector = seat.CFrame.LookVector
+            local velocityDirection = velocity.Unit
+            local dotProduct = vehicleLookVector:Dot(velocityDirection)
+
+            if dotProduct > 0 then
+                local direction = velocity.Unit
+                local boost = (SPEED_MULTIPLIER - 1) * 10
+                local newSpeed = math.min(speed + boost, MAX_SPEED)
+                seat.AssemblyLinearVelocity = direction * newSpeed
+            end
+        end
+    end)
+end
+
+local function removeSpeedHack()
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
+    if currentVehicle then
+        local seat = currentVehicle:FindFirstChildWhichIsA("VehicleSeat")
+        if seat and originalMaxSpeed then
+            seat.MaxSpeed = originalMaxSpeed
+        end
+    end
+    originalMaxSpeed = nil
+    currentVehicle = nil
+end
+
+-- ============================================
+-- AUTOFARM LOADING SCREEN
+-- ============================================
+local TweenService = game:GetService("TweenService")
+
+local function showAutofarmLoading(farmName)
+    local LoadingGui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+    LoadingGui.Name = "AutofarmLoading"
+    LoadingGui.DisplayOrder = 99998
+    LoadingGui.ResetOnSpawn = false
+    LoadingGui.IgnoreGuiInset = true
+    
+    -- Dark overlay
+    local Overlay = Instance.new("Frame", LoadingGui)
+    Overlay.Size = UDim2.new(1, 0, 1, 0)
+    Overlay.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+    Overlay.BackgroundTransparency = 0.1
+    Overlay.BorderSizePixel = 0
+    
+    -- Card container
+    local Card = Instance.new("Frame", Overlay)
+    Card.Size = UDim2.new(0, 320, 0, 180)
+    Card.Position = UDim2.new(0.5, -160, 0.5, -90)
+    Card.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    Card.BorderSizePixel = 0
+    Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 12)
+    
+    -- Glow effect - Gold for premium
+    local Glow = Instance.new("UIStroke", Card)
+    Glow.Color = Color3.fromRGB(255, 215, 0)
+    Glow.Thickness = 2
+    Glow.Transparency = 0.3
+    
+    -- Logo (top right, rounded)
+    local Logo = Instance.new("ImageLabel", Card)
+    Logo.Size = UDim2.new(0, 36, 0, 36)
+    Logo.Position = UDim2.new(1, -46, 0, 10)
+    Logo.BackgroundTransparency = 1
+    Logo.Image = "rbxassetid://75353810328300" -- <-- CHANGE TO YOUR LOGO
+    Logo.ScaleType = Enum.ScaleType.Crop
+    Instance.new("UICorner", Logo).CornerRadius = UDim.new(0, 8)
+    
+    -- Icon
+    local Icon = Instance.new("ImageLabel", Card)
+    Icon.Size = UDim2.new(0, 48, 0, 48)
+    Icon.Position = UDim2.new(0.5, -24, 0, 25)
+    Icon.BackgroundTransparency = 1
+    Icon.Image = "rbxassetid://10734961991" -- Farm icon
+    Icon.ImageColor3 = Color3.fromRGB(255, 215, 0)
+    
+    -- Title
+    local Title = Instance.new("TextLabel", Card)
+    Title.Size = UDim2.new(1, -40, 0, 24)
+    Title.Position = UDim2.new(0, 20, 0, 80)
+    Title.BackgroundTransparency = 1
+    Title.Text = "Loading " .. farmName
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 18
+    
+    -- Subtitle
+    local Subtitle = Instance.new("TextLabel", Card)
+    Subtitle.Size = UDim2.new(1, -40, 0, 18)
+    Subtitle.Position = UDim2.new(0, 20, 0, 105)
+    Subtitle.BackgroundTransparency = 1
+    Subtitle.Text = "Please wait..."
+    Subtitle.TextColor3 = Color3.fromRGB(150, 150, 150)
+    Subtitle.Font = Enum.Font.Gotham
+    Subtitle.TextSize = 13
+    
+    -- Progress bar background
+    local BarBg = Instance.new("Frame", Card)
+    BarBg.Size = UDim2.new(1, -40, 0, 4)
+    BarBg.Position = UDim2.new(0, 20, 0, 145)
+    BarBg.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    BarBg.BorderSizePixel = 0
+    Instance.new("UICorner", BarBg).CornerRadius = UDim.new(0, 2)
+    
+    -- Progress bar fill - Gold for premium
+    local BarFill = Instance.new("Frame", BarBg)
+    BarFill.Size = UDim2.new(0, 0, 1, 0)
+    BarFill.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+    BarFill.BorderSizePixel = 0
+    Instance.new("UICorner", BarFill).CornerRadius = UDim.new(0, 2)
+    
+    -- Pulse animation for icon
+    local pulseTween = TweenService:Create(Icon, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        ImageTransparency = 0.3
+    })
+    pulseTween:Play()
+    
+    -- Progress animation
+    local progressTween = TweenService:Create(BarFill, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.new(1, 0, 1, 0)
+    })
+    progressTween:Play()
+    
+    return LoadingGui
+end
+
+local function hideAutofarmLoading(loadingGui)
+    if not loadingGui then return end
+    
+    local Overlay = loadingGui:FindFirstChildOfClass("Frame")
+    if Overlay then
+        local fadeTween = TweenService:Create(Overlay, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundTransparency = 1
+        })
+        fadeTween:Play()
+        
+        for _, child in ipairs(Overlay:GetChildren()) do
+            if child:IsA("Frame") or child:IsA("TextLabel") or child:IsA("ImageLabel") then
+                TweenService:Create(child, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
+                if child:IsA("TextLabel") then
+                    TweenService:Create(child, TweenInfo.new(0.3), {TextTransparency = 1}):Play()
+                elseif child:IsA("ImageLabel") then
+                    TweenService:Create(child, TweenInfo.new(0.3), {ImageTransparency = 1}):Play()
+                end
+            end
+        end
+    end
+    
+    task.wait(0.4)
+    loadingGui:Destroy()
+end
+
+-- Vehicle monitor
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+
+game:GetService("RunService").Heartbeat:Connect(function()
+    local vehicle = getCurrentVehicle()
+    if vehicle ~= currentVehicle then
+        if currentVehicle then
+            removeSpeedHack()
+        end
+        if vehicle and ENABLED then
+            currentVehicle = vehicle
+            applySpeedHack(vehicle)
+        end
+    end
+end)
+
+-- ============================================
+-- NZNT WINDOW SETUP
+-- ============================================
+local Window = NZNT:CreateWindow({
+    Name = "nznt's hub | Premium",
+    Subtitle = "Drag Drive Simulator",
+    LogoID = "75353810328300",
+    LoadingEnabled = true,
+    LoadingTitle = "nznt's hub",
+    LoadingSubtitle = "Premium Edition - Loading...",
+
+    ConfigSettings = {
+        RootFolder = nil,
+        ConfigFolder = "NZNT_Premium"
+    },
+
+    KeySystem = false,
+    KeySettings = {
+        Title = "Key System",
+        Subtitle = "",
+        Note = "",
+        SaveInRoot = false,
+        SaveKey = false,
+        Key = {},
+        SecondAction = {
+            Enabled = false,
+            Type = "Link",
+            Parameter = ""
+        }
+    }
+})
+
+-- Home Tab
+Window:CreateHomeTab({
+    SupportedExecutors = {
+        "Synapse X",
+        "Krnl",
+        "Fluxus",
+        "Script-Ware",
+        "Electron",
+        "JJSploit",
+        "Delta",
+        "Vega X",
+        "Hydrogen",
+        "Oxygen",
+        "Nihon",
+        "Celery",
+        "Codex",
+        "Ronix",
+        "Vonalia"
+    },
+    DiscordInvite = "q6dUF4CsKH",
+    Icon = 1
+})
+
+-- ============================================
+-- AUTOFARM TAB
+-- ============================================
+local AutofarmTab = Window:CreateTab({
+    Name = "Autofarm",
+    Icon = "agriculture",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+AutofarmTab:CreateSection("Auto Drive Farm")
+AutofarmTab:CreateParagraph({
+    Title = "Drag Drive Simulator Autofarm",
+    Text = "Auto Drive Farm for Drag Drive Simulator. Estimated earnings: 20-30m/h"
+})
+
+AutofarmTab:CreateButton({
+    Name = "Load Auto Drive Farm (20-30m/h)",
+    Description = "Load the stable, tested autofarm version",
+    Callback = function()
+        local loadingGui = showAutofarmLoading("Auto Drive Farm")
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet(STABLE_URL, true))()
+        end)
+        hideAutofarmLoading(loadingGui)
+        if ok then
+            NZNT:Notification({
+                Title = "Success",
+                Icon = "check_circle",
+                ImageSource = "Material",
+                Content = "Auto Drive Farm loaded!"
+            })
+        else
+            NZNT:Notification({
+                Title = "Error",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Failed: " .. tostring(err):sub(1, 50)
+            })
+        end
+    end
+})
+
+AutofarmTab:CreateSection("Drag Autofarm")
+AutofarmTab:CreateParagraph({
+    Title = "Drag Race Autofarm",
+    Text = "Drag race autofarm for Surakarta map only. Estimated earnings: 12-15m/h (MOST STABLE)"
+})
+
+AutofarmTab:CreateButton({
+    Name = "Load Drag Autofarm (12-15m/h)",
+    Description = "Surakarta map only - with checkpoint support",
+    Callback = function()
+        local loadingGui = showAutofarmLoading("Drag Autofarm")
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/drag_autofarm_surakarta.lua", true))()
+        end)
+        hideAutofarmLoading(loadingGui)
+        if ok then
+            NZNT:Notification({
+                Title = "Success",
+                Icon = "check_circle",
+                ImageSource = "Material",
+                Content = "Drag Autofarm loaded!"
+            })
+        else
+            NZNT:Notification({
+                Title = "Error",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Failed: " .. tostring(err):sub(1, 50)
+            })
+        end
+    end
+})
+
+AutofarmTab:CreateSection("Barista Autofarm")
+AutofarmTab:CreateParagraph({
+    Title = "Barista Simulator Autofarm",
+    Text = "Barista Autofarm for Barista Simulator. Estimated earnings: 8-10m/h"
+})
+
+AutofarmTab:CreateButton({
+    Name = "Load Barista Autofarm (8-10m/h)",
+    Description = "Load the Barista autofarm script",
+    Callback = function()
+        local loadingGui = showAutofarmLoading("Barista Autofarm")
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/barista_autofarm.lua", true))()
+        end)
+        hideAutofarmLoading(loadingGui)
+        if ok then
+            NZNT:Notification({
+                Title = "Success",
+                Icon = "check_circle",
+                ImageSource = "Material",
+                Content = "Barista Autofarm loaded!"
+            })
+        else
+            NZNT:Notification({
+                Title = "Error",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Failed: " .. tostring(err):sub(1, 50)
+            })
+        end
+    end
+})
+
+AutofarmTab:CreateSection("Office Autofarm")
+AutofarmTab:CreateParagraph({
+    Title = "Office Worker Autofarm",
+    Text = "Office Worker autofarm with answer delay controls and live money stats."
+})
+
+AutofarmTab:CreateButton({
+    Name = "Load Office Autofarm",
+    Description = "Load the Office Worker autofarm script",
+    Callback = function()
+        local loadingGui = showAutofarmLoading("Office Autofarm")
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet(OFFICE_URL, true))()
+        end)
+        hideAutofarmLoading(loadingGui)
+        if ok then
+            NZNT:Notification({
+                Title = "Success",
+                Icon = "check_circle",
+                ImageSource = "Material",
+                Content = "Office Autofarm loaded!"
+            })
+        else
+            NZNT:Notification({
+                Title = "Error",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Failed: " .. tostring(err):sub(1, 50)
+            })
+        end
+    end
+})
+
+AutofarmTab:CreateDivider()
+AutofarmTab:CreateLabel({
+    Text = "Premium Edition | Creator: _nznt | discord.gg/q6dUF4CsKH",
+    Style = 2
+})
+
+-- ============================================
+-- SPEEDHACK TAB
+-- ============================================
+local SpeedhackTab = Window:CreateTab({
+    Name = "Speedhack",
+    Icon = "speed",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+SpeedhackTab:CreateSection("Premium Speedhack")
+SpeedhackTab:CreateParagraph({
+    Title = "How it works",
+    Text = "Modifies your vehicle's AssemblyLinearVelocity when moving forward. Sit in a vehicle first, then enable. The boost only applies when you're driving forward."
+})
+
+SpeedhackTab:CreateToggle({
+    Name = "Enable Speedhack",
+    Description = "Toggle the speedhack on/off",
+    CurrentValue = false,
+    Callback = function(Value)
+        ENABLED = Value
+        if ENABLED then
+            local vehicle = getCurrentVehicle()
+            if vehicle then
+                currentVehicle = vehicle
+                applySpeedHack(vehicle)
+                NZNT:Notification({
+                    Title = "Speedhack Enabled",
+                    Icon = "check_circle",
+                    ImageSource = "Material",
+                    Content = "Speedhack active! Drive forward to feel the boost."
+                })
+            else
+                NZNT:Notification({
+                    Title = "Warning",
+                    Icon = "warning",
+                    ImageSource = "Material",
+                    Content = "Sit in a vehicle first!"
+                })
+            end
+        else
+            removeSpeedHack()
+            NZNT:Notification({
+                Title = "Speedhack Disabled",
+                Icon = "info",
+                ImageSource = "Material",
+                Content = "Speedhack turned off."
+            })
+        end
+    end
+}, "SpeedhackToggle")
+
+SpeedhackTab:CreateSlider({
+    Name = "Speed Multiplier",
+    Description = "How much to multiply your speed (affects boost amount)",
+    Range = {1.0, 5.0},
+    Increment = 0.1,
+    Suffix = "x",
+    CurrentValue = 1.1,
+    Callback = function(Value) SPEED_MULTIPLIER = Value end
+}, "SpeedMultiplier")
+
+SpeedhackTab:CreateSlider({
+    Name = "Max Speed",
+    Description = "Maximum allowed speed for your vehicle",
+    Range = {50, 500},
+    Increment = 10,
+    Suffix = " studs/s",
+    CurrentValue = 300,
+    Callback = function(Value)
+        MAX_SPEED = Value
+        if currentVehicle and ENABLED then
+            local seat = currentVehicle:FindFirstChildWhichIsA("VehicleSeat")
+            if seat then seat.MaxSpeed = MAX_SPEED end
+        end
+    end
+}, "MaxSpeed")
+
+-- ============================================
+-- MISC TAB
+-- ============================================
+local MiscTab = Window:CreateTab({
+    Name = "Misc",
+    Icon = "more_horiz",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+MiscTab:CreateSection("Anti-AFK")
+MiscTab:CreateParagraph({
+    Title = "Anti-AFK System",
+    Text = "Prevents you from being kicked for being idle/AFK. Automatically handles idle detection."
+})
+
+-- Anti-AFK Button (loads from GitHub)
+MiscTab:CreateButton({
+    Name = "Load Anti-AFK",
+    Callback = function()
+        local success, result = pcall(function()
+            local code = game:HttpGet("https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/anti-afk.lua", true)
+            if code and code ~= "" then
+                local antiAfkModule = loadstring(code)()
+                if antiAfkModule and antiAfkModule.setAntiAFK then
+                    antiAfkModule.setAntiAFK(true)
+                    return true
+                end
+            end
+            return false
+        end)
+        
+        if success and result then
+            NZNT:Notification({
+                Title = "Anti-AFK",
+                Icon = "check_circle",
+                ImageSource = "Material",
+                Content = "Anti-AFK loaded and enabled! You will no longer be kicked for idle.",
+                Lifetime = 3
+            })
+        else
+            NZNT:Notification({
+                Title = "Anti-AFK",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Failed to load Anti-AFK from GitHub. Check your connection.",
+                Lifetime = 3
+            })
+        end
+    end,
+})
+
+MiscTab:CreateDivider()
+
+MiscTab:CreateSection("Premium Features")
+MiscTab:CreateParagraph({
+    Title = "Coming Soon",
+    Text = "This section will include additional PREMIUM utility features like auto-buy, auto-race, teleport options, and more. Stay tuned for updates!"
+})
+
+-- ============================================
+-- THEME & CONFIG TABS
+-- ============================================
+local ThemeTab = Window:CreateTab({
+    Name = "Theme",
+    Icon = "palette",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+ThemeTab:BuildThemeSection()
+
+local ConfigTab = Window:CreateTab({
+    Name = "Config",
+    Icon = "settings",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+ConfigTab:BuildConfigSection()
+
+-- ============================================
+-- WEBHOOK TAB
+-- ============================================
+local WebhookTab = Window:CreateTab({
+    Name = "Webhook",
+    Icon = "webhook",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+WebhookTab:CreateSection("Discord Webhook")
+WebhookTab:CreateParagraph({
+    Title = "Webhook System",
+    Text = "Configure webhook to receive farming stats. This works for ALL autofarms (Auto Drive, Drag, Barista). The autofarms will automatically read these settings and send webhooks while farming."
+})
+
+-- Webhook URL Input
+WebhookTab:CreateSection("Webhook URL")
+local urlInput = WebhookTab:CreateInput({
+    Name = "Discord Webhook URL",
+    PlaceholderText = "https://discord.com/api/webhooks/...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        webhookUrl = Text
+        saveWebhookConfig()
+    end
+})
+-- Set initial value
+if webhookUrl ~= "" then
+    pcall(function() urlInput:Set(webhookUrl) end)
+end
+
+-- Webhook Toggle
+WebhookTab:CreateToggle({
+    Name = "Enable Webhook",
+    Description = "Allow autofarms to send webhooks automatically",
+    CurrentValue = webhookEnabled,
+    Callback = function(Value)
+        webhookEnabled = Value
+        saveWebhookConfig()
+        NZNT:Notification({
+            Title = webhookEnabled and "Webhook Enabled" or "Webhook Disabled",
+            Icon = webhookEnabled and "check_circle" or "info",
+            ImageSource = "Material",
+            Content = webhookEnabled and "Autofarms will now send webhooks!" or "Autofarms will not send webhooks."
+        })
+    end
+})
+
+-- Interval Slider
+WebhookTab:CreateSlider({
+    Name = "Webhook Interval (seconds)",
+    Range = {30, 300},
+    Increment = 10,
+    Suffix = "s",
+    CurrentValue = webhookInterval,
+    Callback = function(Value)
+        webhookInterval = Value
+        saveWebhookConfig()
+    end
+})
+
+-- Test Webhook Button
+WebhookTab:CreateSection("Test Webhook")
+WebhookTab:CreateButton({
+    Name = "Send Test Webhook",
+    Description = "Send a test message to verify your webhook works",
+    Callback = function()
+        if webhookUrl == "" or not webhookUrl:find("discord") then
+            NZNT:Notification({
+                Title = "Error",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Please enter a valid Discord webhook URL first!"
+            })
+            return
+        end
+        NZNT:Notification({
+            Title = "Sending...",
+            Icon = "hourglass_empty",
+            ImageSource = "Material",
+            Content = "Sending test webhook..."
+        })
+        local ok, err = pcall(function()
+            local body = '{"embeds":[{"title":"nznt\'s hub | Test","description":"Webhook is working! Your autofarms will send stats here.","color":16776960,"footer":{"text":"by _nznt — Premium"}}]}'
+            request({
+                Url = webhookUrl,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = body
+            })
+        end)
+        if ok then
+            NZNT:Notification({
+                Title = "Success",
+                Icon = "check_circle",
+                ImageSource = "Material",
+                Content = "Test webhook sent! Check your Discord."
+            })
+        else
+            NZNT:Notification({
+                Title = "Error",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Failed: " .. tostring(err):sub(1, 50)
+            })
+        end
+    end
+})
+
+-- Status display
+WebhookTab:CreateDivider()
+WebhookTab:CreateLabel({
+    Text = "Status: " .. (webhookEnabled and "✓ Enabled" or "✗ Disabled"),
+    Style = 2
+})
+
+-- ============================================
+-- FINISH SETUP
+-- ============================================
+AutofarmTab:Select()
+
+NZNT:Notification({
+    Title = "nznt's hub | Premium Loaded",
+    Icon = "workspace_premium",
+    ImageSource = "Material",
+    Content = "Welcome to the Premium edition! Use RightControl to toggle the UI."
+})
+
+print("[nznt's hub | PREMIUM] NZNT UI loaded successfully!")
