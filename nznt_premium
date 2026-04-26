@@ -418,6 +418,39 @@ local AutofarmTab = Window:CreateTab({
     ShowTitle = true
 })
 
+AutofarmTab:CreateSection("Office Autofarm")
+AutofarmTab:CreateParagraph({
+    Title = "Load Office Autofarm",
+    Text = "Office Worker autofarm with answer delay controls and live money stats."
+})
+
+AutofarmTab:CreateButton({
+    Name = "Load Office Autofarm (32-35m/h) (EXPERIMENTAL!)",
+    Description = "Load the Office Worker autofarm script, best autofarm but still new",
+    Callback = function()
+        local loadingGui = showAutofarmLoading("Office Autofarm")
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet(OFFICE_URL, true))()
+        end)
+        hideAutofarmLoading(loadingGui)
+        if ok then
+            NZNT:Notification({
+                Title = "Success",
+                Icon = "check_circle",
+                ImageSource = "Material",
+                Content = "Office Autofarm loaded!"
+            })
+        else
+            NZNT:Notification({
+                Title = "Error",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Failed: " .. tostring(err):sub(1, 50)
+            })
+        end
+    end
+})
+
 AutofarmTab:CreateSection("Auto Drive Farm")
 AutofarmTab:CreateParagraph({
     Title = "Drag Drive Simulator Autofarm",
@@ -505,39 +538,6 @@ AutofarmTab:CreateButton({
                 Icon = "check_circle",
                 ImageSource = "Material",
                 Content = "Barista Autofarm loaded!"
-            })
-        else
-            NZNT:Notification({
-                Title = "Error",
-                Icon = "error",
-                ImageSource = "Material",
-                Content = "Failed: " .. tostring(err):sub(1, 50)
-            })
-        end
-    end
-})
-
-AutofarmTab:CreateSection("Office Autofarm")
-AutofarmTab:CreateParagraph({
-    Title = "Load Office Autofarm",
-    Text = "Office Worker autofarm with answer delay controls and live money stats."
-})
-
-AutofarmTab:CreateButton({
-    Name = "Load Office Autofarm",
-    Description = "Load the Office Worker autofarm script",
-    Callback = function()
-        local loadingGui = showAutofarmLoading("Office Autofarm")
-        local ok, err = pcall(function()
-            loadstring(game:HttpGet(OFFICE_URL, true))()
-        end)
-        hideAutofarmLoading(loadingGui)
-        if ok then
-            NZNT:Notification({
-                Title = "Success",
-                Icon = "check_circle",
-                ImageSource = "Material",
-                Content = "Office Autofarm loaded!"
             })
         else
             NZNT:Notification({
