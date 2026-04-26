@@ -120,6 +120,8 @@ local remAssignPrint = nil
 local questionConnection = nil
 local printConnection = nil
 local connections = {}
+local seatBlockActive = false
+local seatBlockToken = 0
 
 local function formatNumber(n)
     n = tonumber(n) or 0
@@ -237,6 +239,40 @@ local function releaseSprint()
     pcall(function()
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
     end)
+end
+
+local function setSeatBlocking(enabled)
+    seatBlockActive = enabled
+    seatBlockToken = seatBlockToken + 1
+    local token = seatBlockToken
+
+    local function updateHumanoid()
+        local char = Player.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        if not hum then return end
+
+        pcall(function()
+            hum:SetStateEnabled(Enum.HumanoidStateType.Seated, not enabled)
+        end)
+
+        if enabled and hum.SeatPart then
+            hum.Sit = false
+            pcall(function()
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end)
+        end
+    end
+
+    updateHumanoid()
+
+    if enabled then
+        task.spawn(function()
+            while seatBlockActive and seatBlockToken == token do
+                updateHumanoid()
+                task.wait(0.1)
+            end
+        end)
+    end
 end
 
 local function interactWithPrinter()
@@ -849,6 +885,7 @@ local function stopFarm()
     active = false
     farmRunning = false
     releaseSprint()
+    setSeatBlocking(false)
 
     if sessionStartTime and sessionStartMoney then
         local sessionElapsed = os.time() - sessionStartTime
@@ -904,6 +941,7 @@ local function mainFarmLoop()
                 if pos then
                     isDoingPrinterJob = true
                     setStatus("Walking to printer...")
+                    setSeatBlocking(true)
 
                     sendKey(Enum.KeyCode.Space)
                     task.wait(0.5)
@@ -934,14 +972,17 @@ local function mainFarmLoop()
                         currentSeat = newSeat
                         walkTo(newSeat.Position)
                         task.wait(0.5)
+                        setSeatBlocking(false)
                         newSeat:Sit(hum)
                         task.wait(0.5)
                         setStatus("Back in chair")
                     else
+                        setSeatBlocking(false)
                         setStatus("No return chair found")
                     end
 
                     isDoingPrinterJob = false
+                    setSeatBlocking(false)
                 else
                     pendingPrint = nil
                 end
@@ -1063,6 +1104,7 @@ local function cleanup()
     active = false
     farmRunning = false
     releaseSprint()
+    setSeatBlocking(false)
 
     for _, connection in ipairs(connections) do
         pcall(function()
