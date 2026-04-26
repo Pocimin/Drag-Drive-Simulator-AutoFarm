@@ -519,7 +519,7 @@ AutofarmTab:CreateButton({
 
 AutofarmTab:CreateSection("Office Autofarm")
 AutofarmTab:CreateParagraph({
-    Title = "Office Worker Autofarm",
+    Title = "Load Office Autofarm",
     Text = "Office Worker autofarm with answer delay controls and live money stats."
 })
 
