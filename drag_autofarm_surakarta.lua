@@ -57,9 +57,10 @@ task.wait(2)
 -- CONFIG
 -- =====================
 local SURAKARTA_ID = 131378148336503
-local RACE_DELAY = 0
-local CHECKPOINT_DELAY = 3
-local LOOP_DELAY = 8
+local RACE_DELAY = 15
+local CHECKPOINT_DELAY = 1.5
+local LOOP_DELAY = 2
+local RACE_REJOIN_LIMIT = 100
 local SAVE_FILE = "nznt_dragfarm.json"
 local WEBHOOK_FILE = "nznt_webhook_config.json"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Pocimin/Drag-Drive-Simulator-AutoFarm/refs/heads/main/drag_autofarm_surakarta.lua"
@@ -86,9 +87,15 @@ end
 warn("--- SURAKARTA DETECTED ---")
 
 -- Script source for rejoin
-local scriptSource = ""
-pcall(function() scriptSource = game:HttpGet(SCRIPT_URL, true) end)
-local function queueReExec() pcall(function() queue_on_teleport(scriptSource) end) end
+local reexecSource = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '", true))()'
+local function queueReExec()
+    pcall(function()
+        local queueTeleport = queue_on_teleport or queueonteleport or (syn and syn.queue_on_teleport)
+        if queueTeleport then
+            queueTeleport(reexecSource)
+        end
+    end)
+end
 
 -- =====================
 -- HELPERS
@@ -289,6 +296,7 @@ end
 -- STATE
 -- =====================
 local raceCount = 0
+local rejoining = false
 local active = true
 local lowGraphicsEnabled = true
 local lastFPS = 60
@@ -776,18 +784,24 @@ task.spawn(function()
                 touchDetector(finishDet, seatPos)
                 
                 raceCount = raceCount + 1
+
+                if raceCount >= RACE_REJOIN_LIMIT and not rejoining then
+                    rejoining = true
+                    active = false
+                    saveData((getMoney() - startMoney) + savedEarned, savedElapsed + (os.time() - sessionStart))
+                    vStatus.Text = tostring(RACE_REJOIN_LIMIT) .. " races! Rejoining..."
+                    queueReExec()
+                    task.wait(0.5)
+                    pcall(function()
+                        TS:Teleport(SURAKARTA_ID, Player)
+                    end)
+                    break
+                end
                 
                 -- Delay before next race
                 if LOOP_DELAY > 0 then
                     vStatus.Text = string.format("Waiting %.1fs before next race...", LOOP_DELAY)
                     task.wait(LOOP_DELAY)
-                end
-                
-                if raceCount % 100 == 0 then
-                    saveData((getMoney() - startMoney) + savedEarned, savedElapsed + (os.time() - sessionStart))
-                    vStatus.Text = "100 races! Rejoining..."
-                    task.wait(2); queueReExec(); task.wait(0.5)
-                    pcall(function() TS:Teleport(SURAKARTA_ID, Player) end)
                 end
             end
         end
