@@ -74,6 +74,7 @@ local PathfindingService = game:GetService("PathfindingService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local VirtualUser = game:GetService("VirtualUser")
+local Lighting = game:GetService("Lighting")
 
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
@@ -83,6 +84,12 @@ local CONFIG_FILE = "nznt_office_config.txt"
 
 local MIN_DELAY = 1.0
 local MAX_DELAY = 10.0
+local QUESTION_IDLE_TIMEOUT = 7.0
+local QUESTION_REQUEST_COOLDOWN = 1.5
+local PRINTER_CONFIRM_TIMEOUT = 18.0
+local PRINTER_INTERACT_PAUSE = 1.25
+local PRINTER_MONEY_CONFIRM_DELTA = 0
+local PRINTER_MAX_INTERACT_ATTEMPTS = 3
 
 local answerDelayMin = 2.5
 local answerDelayMax = 4.0
@@ -103,7 +110,10 @@ local farmRunning = false
 local joiningTeam = false
 local currentSeat = nil
 local pendingPrint = nil
+local pendingPrintFromRecovery = false
 local isDoingPrinterJob = false
+local answeringQuestion = false
+local lowGraphicsEnabled = true
 
 local questionsAnswered = 0
 local printersCompleted = 0
@@ -122,6 +132,77 @@ local printConnection = nil
 local connections = {}
 local seatBlockActive = false
 local seatBlockToken = 0
+local lastQuestionSeenAt = os.clock()
+local lastQuestionRequestAt = 0
+local questionRequestInFlight = false
+local lastKnownPrint = nil
+local chairIdleRescueCount = 0
+local lowGraphicsApplied = false
+
+local function simplifyVisual(instance)
+    pcall(function()
+        if instance:IsA("BasePart") then
+            instance.Material = Enum.Material.SmoothPlastic
+            instance.Reflectance = 0
+            instance.CastShadow = false
+        end
+
+        if instance:IsA("MeshPart") then
+            instance.TextureID = ""
+        elseif instance:IsA("SpecialMesh") then
+            instance.TextureId = ""
+        elseif instance:IsA("Decal") or instance:IsA("Texture") or instance:IsA("SurfaceAppearance") then
+            instance:Destroy()
+        elseif instance:IsA("ParticleEmitter") or instance:IsA("Trail") or instance:IsA("Beam") then
+            instance.Enabled = false
+        elseif instance:IsA("Smoke") or instance:IsA("Fire") or instance:IsA("Sparkles") then
+            instance.Enabled = false
+        end
+    end)
+end
+
+local function applyLowGraphics()
+    if not lowGraphicsEnabled or lowGraphicsApplied then return end
+    lowGraphicsApplied = true
+
+    pcall(function()
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    end)
+    pcall(function()
+        settings().Rendering.QualityLevel = 1
+    end)
+
+    pcall(function()
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 9e9
+        Lighting.Brightness = 1
+    end)
+
+    for _, effect in ipairs(Lighting:GetChildren()) do
+        pcall(function()
+            if effect:IsA("PostEffect") or effect:IsA("Atmosphere") or effect:IsA("Sky") then
+                effect:Destroy()
+            end
+        end)
+    end
+
+    task.spawn(function()
+        local processed = 0
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            simplifyVisual(obj)
+            processed = processed + 1
+            if processed % 250 == 0 then
+                task.wait()
+            end
+        end
+    end)
+
+    table.insert(connections, workspace.DescendantAdded:Connect(function(obj)
+        if lowGraphicsEnabled then
+            task.defer(simplifyVisual, obj)
+        end
+    end))
+end
 
 local function formatNumber(n)
     n = tonumber(n) or 0
@@ -235,10 +316,39 @@ local function sendKey(key)
     VirtualInputManager:SendKeyEvent(false, key, false, game)
 end
 
+local sprintHoldToken = 0
+
+local function startSprintHold()
+    sprintHoldToken = sprintHoldToken + 1
+    local token = sprintHoldToken
+
+    task.spawn(function()
+        while token == sprintHoldToken and active do
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
+            end)
+            task.wait(0.2)
+        end
+    end)
+end
+
 local function releaseSprint()
+    sprintHoldToken = sprintHoldToken + 1
+
     pcall(function()
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
     end)
+end
+
+local function forceStand(hum)
+    if not hum then return end
+
+    if hum.SeatPart or hum.Sit then
+        hum.Sit = false
+        pcall(function()
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end)
+    end
 end
 
 local function setSeatBlocking(enabled)
@@ -276,11 +386,22 @@ local function setSeatBlocking(enabled)
 end
 
 local function interactWithPrinter()
-    VirtualUser:CaptureController()
-    VirtualUser:SetKeyDown("0x65")
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     task.wait(1.8)
-    VirtualUser:SetKeyUp("0x65")
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
     return true
+end
+
+local function nudgeToward(root, targetPos)
+    if not root then return end
+
+    local delta = targetPos - root.Position
+    if delta.Magnitude < 1 then return end
+
+    pcall(function()
+        local step = math.min(delta.Magnitude, 4)
+        root.CFrame = CFrame.new(root.Position + delta.Unit * step + Vector3.new(0, 0.25, 0), targetPos)
+    end)
 end
 
 local function solveQuestion(question)
@@ -354,16 +475,27 @@ local function seatTP(targetSeat)
     return hum.SeatPart == targetSeat
 end
 
-local function walkTo(targetPos)
+local function walkTo(targetPos, options)
+    options = options or {}
+
     local char = getChar()
     local hum = char:FindFirstChild("Humanoid")
     local root = char:FindFirstChild("HumanoidRootPart")
     if not hum or not root then return false end
 
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
+    local radius = options.radius or 5
+    local finalTimeout = options.finalTimeout or 4
+    local requirePrinterJob = options.requirePrinterJob ~= false
+
+    local function shouldKeepWalking()
+        return active and (not requirePrinterJob or isDoingPrinterJob)
+    end
+
+    startSprintHold()
+    forceStand(hum)
 
     local path = PathfindingService:CreatePath({
-        AgentRadius = 2,
+        AgentRadius = options.agentRadius or 3.5,
         AgentHeight = 5,
         AgentCanJump = true,
         AgentJumpHeight = 7.5,
@@ -376,13 +508,18 @@ local function walkTo(targetPos)
 
     if not success or path.Status ~= Enum.PathStatus.Success then
         hum:MoveTo(targetPos)
-        task.wait(2)
+        local started = os.clock()
+        while shouldKeepWalking() and (root.Position - targetPos).Magnitude > radius and os.clock() - started < finalTimeout do
+            forceStand(hum)
+            hum:MoveTo(targetPos)
+            task.wait(0.2)
+        end
         releaseSprint()
-        return false
+        return (root.Position - targetPos).Magnitude <= radius
     end
 
     for _, waypoint in ipairs(path:GetWaypoints()) do
-        if not active or not isDoingPrinterJob then break end
+        if not shouldKeepWalking() then break end
 
         if waypoint.Action == Enum.PathWaypointAction.Jump then
             hum:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -390,15 +527,44 @@ local function walkTo(targetPos)
 
         hum:MoveTo(waypoint.Position)
 
-        local timeout = 0
-        while active and isDoingPrinterJob and (root.Position - waypoint.Position).Magnitude > 4 and timeout < 50 do
+        local started = os.clock()
+        local lastDistance = (root.Position - waypoint.Position).Magnitude
+        local stallTicks = 0
+
+        while shouldKeepWalking() and (root.Position - waypoint.Position).Magnitude > radius and os.clock() - started < 3.5 do
+            forceStand(hum)
+
+            local currentDistance = (root.Position - waypoint.Position).Magnitude
+            if currentDistance >= lastDistance - 0.15 then
+                stallTicks = stallTicks + 1
+            else
+                stallTicks = 0
+            end
+
+            if stallTicks >= 8 then
+                hum:MoveTo(waypoint.Position)
+                hum.Jump = true
+            end
+
+            if stallTicks >= 16 then
+                nudgeToward(root, waypoint.Position)
+                break
+            end
+
+            lastDistance = currentDistance
             task.wait(0.1)
-            timeout = timeout + 1
         end
     end
 
+    local started = os.clock()
+    while shouldKeepWalking() and (root.Position - targetPos).Magnitude > radius and os.clock() - started < finalTimeout do
+        forceStand(hum)
+        hum:MoveTo(targetPos)
+        task.wait(0.2)
+    end
+
     releaseSprint()
-    return true
+    return (root.Position - targetPos).Magnitude <= radius
 end
 
 local function ensureRemotes()
@@ -758,6 +924,9 @@ setAnswerMaxSlider = makeSlider("⏳", "Answer Delay Max", MIN_DELAY, MAX_DELAY,
     saveConfig()
 end)
 
+makeSection("Performance", 24)
+local vLowGraphics = makeRow("▣", "Low Graphics", lowGraphicsEnabled and "Enabled" or "Off", 25)
+
 makeSection("Office Stats", 30)
 local vStatus = makeRow("▶", "Status", "Auto starting...", 31)
 local vQuestions = makeRow("🧠", "Questions Answered", "0", 32)
@@ -767,6 +936,9 @@ local function setStatus(text)
     vStatus.Text = text
     print("[Office Farm] " .. text)
 end
+
+applyLowGraphics()
+vLowGraphics.Text = lowGraphicsEnabled and "Enabled" or "Off"
 
 resetBtn.MouseButton1Click:Connect(function()
     totalEarned = 0
@@ -781,7 +953,193 @@ resetBtn.MouseButton1Click:Connect(function()
     resetBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 end)
 
+local function requestQuestion(statusText)
+    if not remGenQuestion then return false end
+    if pendingPrint or isDoingPrinterJob then
+        if statusText then
+            setStatus("Print pending - skipping question request")
+        end
+        return false
+    end
+    if questionRequestInFlight then
+        if statusText then
+            setStatus("Question request already pending")
+        end
+        return false
+    end
+    if os.clock() - lastQuestionRequestAt < QUESTION_REQUEST_COOLDOWN then return false end
+
+    questionRequestInFlight = true
+    lastQuestionRequestAt = os.clock()
+    if statusText then
+        setStatus(statusText)
+    end
+
+    task.spawn(function()
+        if setthreadidentity then pcall(setthreadidentity, 2) end
+        local ok = pcall(function()
+            remGenQuestion:FireServer()
+        end)
+        if setthreadidentity then pcall(setthreadidentity, 7) end
+
+        if not ok then
+            questionRequestInFlight = false
+            setStatus("Question request failed")
+        end
+    end)
+
+    return true
+end
+
+local function detectAssignedPrinterFromGui()
+    local containers = {PlayerGui}
+    pcall(function()
+        table.insert(containers, game:GetService("CoreGui"))
+    end)
+
+    for _, container in ipairs(containers) do
+        local ok, descendants = pcall(function()
+            return container:GetDescendants()
+        end)
+
+        if ok then
+            for _, gui in ipairs(descendants) do
+                local isOwnUi = false
+                pcall(function()
+                    isOwnUi = Gui and gui:IsDescendantOf(Gui)
+                end)
+
+                if not isOwnUi and (gui:IsA("TextLabel") or gui:IsA("TextButton") or gui:IsA("TextBox")) then
+                    local text = tostring(gui.Text or "")
+                    local direct = text:match("Print_%d")
+                    if direct and PRINTER_POS[direct] then
+                        return direct
+                    end
+
+                    local numbered = text:match("[Pp]rinter%s*(%d)") or text:match("[Pp]rint[%s_%-]*(%d)")
+                    if numbered and PRINTER_POS["Print_" .. numbered] then
+                        return "Print_" .. numbered
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function recoverIdleOfficeFlow()
+    local detectedPrint = detectAssignedPrinterFromGui()
+    if detectedPrint then
+        pendingPrint = detectedPrint
+        pendingPrintFromRecovery = true
+        lastKnownPrint = detectedPrint
+        setStatus("No question - printer detected: " .. detectedPrint)
+        return
+    end
+
+    chairIdleRescueCount = chairIdleRescueCount + 1
+
+    if lastKnownPrint then
+        pendingPrint = lastKnownPrint
+        pendingPrintFromRecovery = true
+        setStatus("No question - checking last printer")
+        return
+    end
+
+    if questionRequestInFlight then
+        setStatus("Waiting for question response")
+        return
+    end
+
+    requestQuestion("No question for 7s - refreshing")
+end
+
+local function completePrinterJob(printName, pos)
+    local started = os.clock()
+    local attempts = 0
+    local moneyBeforePrint = getMoney()
+    local sawPrintInGui = detectAssignedPrinterFromGui() == printName
+
+    while active and pendingPrint == printName and os.clock() - started < PRINTER_CONFIRM_TIMEOUT do
+        local char = getChar()
+        local root = char:FindFirstChild("HumanoidRootPart")
+
+        if root and (root.Position - pos).Magnitude > 8 then
+            setStatus("Repositioning to printer...")
+            walkTo(pos, {radius = 5, finalTimeout = 5})
+        end
+
+        attempts = attempts + 1
+        setStatus("Printing " .. tostring(printName) .. " (" .. tostring(attempts) .. ")")
+        interactWithPrinter()
+
+        local waitUntil = os.clock() + PRINTER_INTERACT_PAUSE
+        repeat
+            if getMoney() > moneyBeforePrint + PRINTER_MONEY_CONFIRM_DELTA then
+                pendingPrint = nil
+                pendingPrintFromRecovery = false
+                lastKnownPrint = nil
+                return true, attempts
+            end
+
+            local detectedPrint = detectAssignedPrinterFromGui()
+            if detectedPrint == printName then
+                sawPrintInGui = true
+            elseif sawPrintInGui and os.clock() - started > 1.5 then
+                pendingPrint = nil
+                pendingPrintFromRecovery = false
+                lastKnownPrint = nil
+                return true, attempts
+            end
+
+            task.wait(0.1)
+        until not active or pendingPrint ~= printName or os.clock() >= waitUntil
+
+        if attempts >= PRINTER_MAX_INTERACT_ATTEMPTS then
+            pendingPrint = nil
+            pendingPrintFromRecovery = false
+            return true, attempts
+        end
+    end
+
+    return pendingPrint ~= printName, attempts
+end
+
+local function fireCorrectAnswer(correctAnswerId, sessionId)
+    local response = nil
+    local received = false
+    local connection
+
+    connection = remCorrectAnswer.OnClientEvent:Connect(function(value)
+        response = value
+        received = true
+    end)
+
+    if setthreadidentity then pcall(setthreadidentity, 2) end
+    pcall(function()
+        remCorrectAnswer:FireServer(correctAnswerId, sessionId)
+    end)
+    if setthreadidentity then pcall(setthreadidentity, 7) end
+
+    local started = os.clock()
+    while active and not received and os.clock() - started < 6 do
+        task.wait(0.1)
+    end
+
+    pcall(function()
+        connection:Disconnect()
+    end)
+
+    return response
+end
+
 local function onQuestionReceived(question, answers, sessionId)
+    questionRequestInFlight = false
+    lastQuestionSeenAt = os.clock()
+    chairIdleRescueCount = 0
+    answeringQuestion = true
+
     pcall(function()
         if not active then return end
         local solvedValue = solveQuestion(question)
@@ -802,26 +1160,25 @@ local function onQuestionReceived(question, answers, sessionId)
         task.wait(randomDelay(answerDelayMin, answerDelayMax))
         if not active then return end
 
-        task.spawn(function()
-            if setthreadidentity then pcall(setthreadidentity, 2) end
-            remCorrectAnswer:FireServer(correctAnswerId, sessionId)
-            if setthreadidentity then pcall(setthreadidentity, 7) end
-        end)
-
-        local response = remCorrectAnswer.OnClientEvent:Wait()
+        local response = fireCorrectAnswer(correctAnswerId, sessionId)
 
         if response == "success" then
             questionsAnswered = questionsAnswered + 1
             vQuestions.Text = tostring(questionsAnswered)
             setStatus("Answered question")
-
-            task.spawn(function()
-                if setthreadidentity then pcall(setthreadidentity, 2) end
-                remGenQuestion:FireServer()
-                if setthreadidentity then pcall(setthreadidentity, 7) end
+            lastQuestionSeenAt = os.clock()
+            task.delay(0.5, function()
+                if active and not pendingPrint and not isDoingPrinterJob then
+                    requestQuestion()
+                end
             end)
+        else
+            setStatus("Answer timed out - waiting")
+            lastQuestionSeenAt = os.clock()
         end
     end)
+
+    answeringQuestion = false
 end
 
 local function hookOfficeRemotes()
@@ -830,7 +1187,13 @@ local function hookOfficeRemotes()
     questionConnection = remGenQuestion.OnClientEvent:Connect(onQuestionReceived)
     printConnection = remAssignPrint.OnClientEvent:Connect(function(printerName)
         if not active then return end
+        questionRequestInFlight = false
         pendingPrint = printerName
+        pendingPrintFromRecovery = false
+        if printerName and PRINTER_POS[printerName] then
+            lastKnownPrint = printerName
+        end
+        chairIdleRescueCount = 0
         setStatus("Print job assigned: " .. tostring(printerName))
     end)
 
@@ -900,7 +1263,11 @@ local function stopFarm()
     startTime = nil
     startMoney = nil
     pendingPrint = nil
+    pendingPrintFromRecovery = false
     isDoingPrinterJob = false
+    answeringQuestion = false
+    questionRequestInFlight = false
+    chairIdleRescueCount = 0
 
     setStatus("Stopped - Ready")
     vEarned.Text = "Rp. 0"
@@ -934,6 +1301,9 @@ local function mainFarmLoop()
         end
 
         setStatus("Seated - answering questions")
+        lastQuestionSeenAt = os.clock()
+        chairIdleRescueCount = 0
+        requestQuestion("Seated - requesting question")
 
         while active do
             if pendingPrint then
@@ -946,36 +1316,49 @@ local function mainFarmLoop()
                     sendKey(Enum.KeyCode.Space)
                     task.wait(0.5)
 
-                    walkTo(pos)
+                    walkTo(pos, {radius = 5, finalTimeout = 5})
                     task.wait(0.5)
 
                     setStatus("Collecting printer job...")
                     local currentPrint = pendingPrint
-                    local attempts = 0
+                    local completed, attempts = completePrinterJob(currentPrint, pos)
 
-                    while active and pendingPrint == currentPrint and attempts < 1 do
-                        interactWithPrinter()
-                        task.wait(1)
-                        attempts = attempts + 1
-                    end
-
-                    if pendingPrint ~= currentPrint then
+                    if completed then
+                        pendingPrintFromRecovery = false
                         printersCompleted = printersCompleted + 1
                         vPrinters.Text = tostring(printersCompleted)
-                        setStatus("Printer completed")
+                        setStatus("Printer completed after " .. tostring(attempts) .. " attempt(s)")
+                    else
+                        if pendingPrintFromRecovery then
+                            pendingPrint = nil
+                            pendingPrintFromRecovery = false
+                            lastKnownPrint = nil
+                            setStatus("Printer check failed - returning to chair")
+                        else
+                            setStatus("Printer not confirmed - retrying")
+                            task.wait(0.75)
+                            isDoingPrinterJob = false
+                            continue
+                        end
                     end
-                    pendingPrint = nil
 
                     setStatus("Returning to chair...")
-                    local newSeat = findAvailableChair()
+                    local newSeat = currentSeat
+                    if not newSeat or not newSeat.Parent or newSeat.Occupant then
+                        newSeat = findAvailableChair()
+                    end
+
                     if newSeat then
                         currentSeat = newSeat
-                        walkTo(newSeat.Position)
+                        walkTo(newSeat.Position, {radius = 5, finalTimeout = 5})
                         task.wait(0.5)
                         setSeatBlocking(false)
                         newSeat:Sit(hum)
                         task.wait(0.5)
                         setStatus("Back in chair")
+                        lastQuestionSeenAt = os.clock()
+                        chairIdleRescueCount = 0
+                        requestQuestion("Back in chair - requesting question")
                     else
                         setSeatBlocking(false)
                         setStatus("No return chair found")
@@ -986,6 +1369,9 @@ local function mainFarmLoop()
                 else
                     pendingPrint = nil
                 end
+            elseif hum.SeatPart == currentSeat and not answeringQuestion and os.clock() - lastQuestionSeenAt >= QUESTION_IDLE_TIMEOUT then
+                recoverIdleOfficeFlow()
+                lastQuestionSeenAt = os.clock()
             elseif not isDoingPrinterJob and hum.SeatPart ~= currentSeat then
                 setStatus("Reseating...")
                 if currentSeat and currentSeat.Parent then
@@ -1049,7 +1435,14 @@ local function startFarm()
     questionsAnswered = 0
     printersCompleted = 0
     pendingPrint = nil
+    pendingPrintFromRecovery = false
+    answeringQuestion = false
     currentSeat = nil
+    lastQuestionSeenAt = os.clock()
+    lastQuestionRequestAt = 0
+    questionRequestInFlight = false
+    lastKnownPrint = nil
+    chairIdleRescueCount = 0
     sessionStartTime = os.time()
     sessionStartMoney = getMoney()
     startTime = os.time()
