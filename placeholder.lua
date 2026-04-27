@@ -61,6 +61,7 @@ task.wait(2)
     local DEFAULT_THRESHOLD = 500000
     local MIN_THRESHOLD     = 500000
     local MAX_THRESHOLD     = 5000000
+    local NOT_SEATED_TIMEOUT = 20
 
     local active          = false
     local farmingActive   = false
@@ -77,6 +78,7 @@ task.wait(2)
     local lastDirChange   = 0
     local DIR_COOLDOWN    = 0.3
     local isRespawning    = false
+    local unseatedSince   = nil
     local vehicleInput    = "Yamahax-MioSporty"
     local webhookUrl      = ""
     local webhookInterval = 60
@@ -305,23 +307,56 @@ task.wait(2)
         end
         return best
     end
+    local function getVehicleRootFromSeat(seat)
+        local node = seat
+        while node and node.Parent and node.Parent ~= workspace do
+            node = node.Parent
+        end
+        if node and node ~= seat then
+            return node
+        end
+        return seat
+    end
+    local function getPartLowestY(part)
+        local cf, half = part.CFrame, part.Size * 0.5
+        local lowest = math.huge
+        for _, x in ipairs({-1, 1}) do
+            for _, y in ipairs({-1, 1}) do
+                for _, z in ipairs({-1, 1}) do
+                    local p = cf * Vector3.new(half.X * x, half.Y * y, half.Z * z)
+                    if p.Y < lowest then
+                        lowest = p.Y
+                    end
+                end
+            end
+        end
+        return lowest
+    end
+
+    local function isWheelPart(part)
+        local name = part.Name:lower()
+        return name:find("wheel") or name:find("tire") or name:find("tyre") or name:find("rim")
+    end
+
     local function calculateSeatOffset(vehicle, seat)
-        -- Calculate the vertical offset from seat to lowest wheel
-        -- This ensures wheels touch the ground regardless of vehicle type
         local lowestWheelY = math.huge
+        local lowestVehicleY = math.huge
         for _, part in ipairs(vehicle:GetDescendants()) do
-            if part:IsA("BasePart") then
-                local name = part.Name:lower()
-                if name:find("wheel") or name:find("tire") then
-                    local wheelBottom = part.Position.Y - (part.Size.Y / 2)
+            if part:IsA("BasePart") and part ~= seat then
+                local wheelBottom = getPartLowestY(part)
+                if wheelBottom < lowestVehicleY then
+                    lowestVehicleY = wheelBottom
+                end
+                if isWheelPart(part) then
                     if wheelBottom < lowestWheelY then
                         lowestWheelY = wheelBottom
                     end
                 end
             end
         end
-        if lowestWheelY ~= math.huge then
-            return seat.Position.Y - lowestWheelY
+        local lowestY = lowestWheelY ~= math.huge and lowestWheelY or lowestVehicleY
+        if lowestY ~= math.huge then
+            return math.clamp(seat.Position.Y - lowestY, 1, 12)
         end
         return 1.5  -- Default fallback
     end
@@ -341,6 +376,17 @@ task.wait(2)
         if force then force:Destroy() force = nil end
         if gyro then gyro:Destroy() gyro = nil end
         if attachment then attachment:Destroy() attachment = nil end
+    end
+
+    local function groundRaycast(origin, distance)
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Blacklist
+        params.IgnoreWater = true
+        local filter = {}
+        if currentVehicle then table.insert(filter, currentVehicle) end
+        if Player.Character then table.insert(filter, Player.Character) end
+        params.FilterDescendantsInstances = filter
+        return workspace:Raycast(origin, Vector3.new(0, -distance, 0), params)
     end
 
     -- Anti-AFK removed - now handled by UI loader
@@ -768,10 +814,11 @@ task.wait(2)
         end
     end
 
-    local function respawnVehicle(hum)
+    local function respawnVehicle(hum, statusText)
         if isRespawning then return end
         isRespawning = true; farmingActive = false
-        vStatus.Text = "Reached " .. formatNumber(FARM_THRESHOLD) .. "! Respawning..."
+        unseatedSince = nil
+        vStatus.Text = statusText or ("Reached " .. formatNumber(FARM_THRESHOLD) .. "! Respawning...")
         
         -- Don't update totalEarned/totalTime here - UI handles it with session values
         -- This prevents double counting
@@ -789,9 +836,10 @@ task.wait(2)
         root.CFrame = seat.CFrame * CFrame.new(0, 2, 0); task.wait(1)
         seat:Sit(hum); task.wait(1)
         
-        currentVehicle = seat.Parent
+        currentVehicle = getVehicleRootFromSeat(seat)
         seatOffset = calculateSeatOffset(currentVehicle, seat)
         startMoney = getMoney(); startTime = os.time()
+        unseatedSince = nil
         setupPhysics(seat)
         farmingActive = true; isRespawning = false; vStatus.Text = "Farming!"
     end
@@ -825,10 +873,11 @@ task.wait(2)
         if hum.SeatPart ~= seat then vStatus.Text = "Failed to sit!"; return false end
         
         pcall(function() blur:Destroy() end)
-        currentVehicle = seat.Parent
+        currentVehicle = getVehicleRootFromSeat(seat)
         seatOffset = calculateSeatOffset(currentVehicle, seat)
         startMoney = getMoney(); startTime = os.time()
         sessionStartMoney = startMoney; sessionStartTime = os.time()
+        unseatedSince = nil
         farmingActive = true; active = true
         setupPhysics(seat)
         
@@ -875,6 +924,43 @@ task.wait(2)
             toggleBtn.Text = "LOADING..."; toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 0)
             if not startFarming() then toggleBtn.Text = "▶ START"; toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0) end
         else stopFarming() end
+    end)
+
+    task.spawn(function()
+        while true do
+            task.wait(1)
+
+            if not farmingActive or isRespawning then
+                unseatedSince = nil
+                continue
+            end
+
+            local char = Player.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local expectedSeat = currentVehicle and (currentVehicle:IsA("VehicleSeat") and currentVehicle or currentVehicle:FindFirstChildWhichIsA("VehicleSeat", true))
+
+            if hum and hum.SeatPart and (not expectedSeat or hum.SeatPart == expectedSeat) then
+                unseatedSince = nil
+                continue
+            end
+
+            unseatedSince = unseatedSince or os.clock()
+            if os.clock() - unseatedSince >= NOT_SEATED_TIMEOUT then
+                unseatedSince = nil
+                vStatus.Text = "Not seated for 20s! Restarting..."
+
+                if hum then
+                    respawnVehicle(hum, "Not seated for 20s! Respawning...")
+                else
+                    farmingActive = false
+                    active = false
+                    cleanupPhysics()
+                    despawnVehicle()
+                    task.wait(1)
+                    startFarming()
+                end
+            end
+        end
     end)
 
     local function sendWebhook()
@@ -940,7 +1026,7 @@ task.wait(2)
 
     RunService.Heartbeat:Connect(function()
         if not farmingActive or not force or not currentVehicle then return end
-        local seat = currentVehicle:FindFirstChildWhichIsA("VehicleSeat")
+        local seat = currentVehicle:IsA("VehicleSeat") and currentVehicle or currentVehicle:FindFirstChildWhichIsA("VehicleSeat", true)
         if not seat then return end
         
         -- Check auto-rejoin timer
@@ -966,7 +1052,7 @@ task.wait(2)
             end
         end
         
-        local groundRay = workspace:Raycast(seat.Position, Vector3.new(0, -10, 0))
+        local groundRay = groundRaycast(seat.Position, math.max(25, seatOffset + 8))
         if not groundRay then
             -- In air/void - respawn immediately with retry
             vStatus.Text = "In air! Respawning..."
@@ -989,7 +1075,7 @@ task.wait(2)
                             task.wait(0.5)
                             newSeat:Sit(hum)
                             task.wait(1)
-                            currentVehicle = newSeat.Parent
+                            currentVehicle = getVehicleRootFromSeat(newSeat)
                             seatOffset = calculateSeatOffset(currentVehicle, newSeat)
                             startMoney = getMoney()
                             startTime = os.time()
@@ -1019,7 +1105,7 @@ task.wait(2)
         
         -- Direction change detection
         local rayOrigin = (seat.CFrame * CFrame.new(0, 0, -CHECK_DISTANCE * direction)).p
-        local hit = workspace:Raycast(rayOrigin, Vector3.new(0, -30, 0))
+        local hit = groundRaycast(rayOrigin, 30)
         if not hit then
             local now = tick()
             if now - lastDirChange >= DIR_COOLDOWN then
