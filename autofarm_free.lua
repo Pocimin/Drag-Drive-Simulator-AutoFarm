@@ -70,6 +70,7 @@ local FARM_THRESHOLD    = 500000
 local DEFAULT_THRESHOLD = 500000
 local MIN_THRESHOLD     = 100000
 local MAX_THRESHOLD     = 2500000
+local NOT_SEATED_TIMEOUT = 20
 
 local active          = false
 local currentVehicle  = nil
@@ -85,8 +86,13 @@ local lastDirChange   = 0
 local DIR_COOLDOWN    = 0.3
 local isRespawning    = false
 local isRestarting    = false
+local unseatedSince   = nil
 local totalEarned     = 0
 local totalTime       = 0
+
+-- Session tracking (to prevent total stats from resetting on respawn)
+local sessionStartTime = nil
+local sessionStartMoney = nil
 
 local function getExecutorName()
     if identifyexecutor then local ok, n = pcall(identifyexecutor) if ok and n then return n end end
@@ -115,6 +121,77 @@ end
 local function getPing()
     local ok, ping = pcall(function() return Player:GetNetworkPing() end)
     return ok and math.floor(ping*1000) or 0
+end
+local function isSacredFloorPart(obj)
+    if not obj or not obj:IsA("BasePart") then return false end
+    if obj.Name == "THE_SACRED_FLOOR" then return true end
+    local size = obj.Size
+    local lowerName = obj.Name:lower()
+    if lowerName:find("baseplate") or lowerName:find("floor") or lowerName:find("platform") then
+        return size.X >= 500 or size.Z >= 500
+    end
+    return size.X >= HUGE_PLATFORM_SIZE or size.Z >= HUGE_PLATFORM_SIZE
+end
+local function protectSacredFloor(part)
+    if not isSacredFloorPart(part) then return nil end
+    savedFloor = part
+    pcall(function()
+        savedFloor.Name = "THE_SACRED_FLOOR"
+        savedFloor.Anchored = true
+        savedFloor.Parent = workspace
+    end)
+    return savedFloor
+end
+local function findSacredFloorIn(container)
+    if not container then return nil end
+    if isSacredFloorPart(container) then return container end
+    for _, obj in ipairs(container:GetDescendants()) do
+        if isSacredFloorPart(obj) then
+            return obj
+        end
+    end
+    return nil
+end
+local function findAndProtectSacredFloor(root)
+    if savedFloor and savedFloor.Parent then return savedFloor end
+
+    local existing = workspace:FindFirstChild("THE_SACRED_FLOOR", true)
+    if isSacredFloorPart(existing) then
+        return protectSacredFloor(existing)
+    end
+
+    -- Drill through small parts under the player, then fall back to a full scan.
+    if root then
+        for _ = 1, 60 do
+            local result = workspace:Raycast(root.Position, Vector3.new(0, -1000, 0))
+            if not result or not result.Instance then break end
+
+            local part = result.Instance
+            if isSacredFloorPart(part) then
+                return protectSacredFloor(part)
+            end
+
+            if part:IsA("Terrain") then break end
+            pcall(function() part:Destroy() end)
+            task.wait(0.02)
+        end
+    end
+
+    local bestFloor, bestArea = nil, 0
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if isSacredFloorPart(obj) then
+            local area = obj.Size.X * obj.Size.Z
+            if area > bestArea then
+                bestFloor = obj
+                bestArea = area
+            end
+        end
+    end
+
+    if bestFloor then
+        return protectSacredFloor(bestFloor)
+    end
+    return nil
 end
 local function sendKey(key)
     VIM:SendKeyEvent(true, key, false, game)
@@ -290,7 +367,7 @@ local function makeRow(icon, label, valueDefault, order)
     vL.Size = UDim2.new(0.5, -14, 1, 0) vL.Position = UDim2.new(0.5, 0, 0, 0)
     vL.BackgroundTransparency = 1 vL.Text = valueDefault
     vL.TextColor3 = Color3.fromRGB(230, 230, 230)
-    vL.Font = Enum.Font.GothamBold iL.TextSize = 13
+    vL.Font = Enum.Font.GothamBold vL.TextSize = 14
     vL.TextXAlignment = Enum.TextXAlignment.Right vL.ZIndex = 4
     local sep = Instance.new("Frame", row)
     sep.Size = UDim2.new(1, -14, 0, 1) sep.Position = UDim2.new(0, 7, 1, -1)
@@ -408,11 +485,12 @@ blur.Size = 24
 -- =====================
 -- RESPAWN BIKE (Auto-respawn at threshold)
 -- =====================
-local function respawnBike(hum)
+local function respawnBike(hum, statusText)
     if isRespawning then return end
     isRespawning = true
     active = false
-    vStatus.Text = "Reached " .. formatNumber(FARM_THRESHOLD) .. "! Respawning bike..."
+    unseatedSince = nil
+    vStatus.Text = statusText or ("Reached " .. formatNumber(FARM_THRESHOLD) .. "! Respawning bike...")
 
     sendKey(Enum.KeyCode.Space); task.wait(0.5)
     cleanupPhysics()
@@ -425,11 +503,33 @@ local function respawnBike(hum)
     local char = Player.Character or Player.CharacterAdded:Wait()
     local root = char:WaitForChild("HumanoidRootPart")
     root.CFrame = seat.CFrame * CFrame.new(0, 2, 0); task.wait(1)
-    seat:Sit(hum); task.wait(1)
+    
+    -- Retry sitting up to 3 times (motor bug fix)
+    local sitSuccess = false
+    for sitAttempt = 1, 3 do
+        seat:Sit(hum); task.wait(1)
+        if hum.SeatPart == seat then
+            sitSuccess = true
+            break
+        end
+        vStatus.Text = "Retry sit " .. sitAttempt .. "/3..."
+        task.wait(0.5)
+    end
+    
+    if not sitSuccess then
+        vStatus.Text = "Failed to sit! Retrying respawn..."
+        isRespawning = false
+        -- Try again
+        task.spawn(function() respawnBike(hum) end)
+        return
+    end
     
     currentVehicle = seat.Parent
     seatOffset = calculateSeatOffset(currentVehicle, seat)
+    -- Don't update totalEarned/totalTime here - only reset per-bike stats
+    -- This prevents double counting
     startMoney = getMoney(); startTime = os.time()
+    unseatedSince = nil
     setupPhysics(seat)
     
     active = true
@@ -455,32 +555,31 @@ local function startFarming()
         task.wait(1)
     end
 
-    -- Drill down to the huge platform
     vStatus.Text = "Loading Script..."
-    local searching = true
-    while searching do
-        local result = workspace:Raycast(root.Position, Vector3.new(0, -1000, 0))
-        if result and result.Instance then
-            local part = result.Instance
-            if part.Size.X >= HUGE_PLATFORM_SIZE or part.Name == "THE_SACRED_FLOOR" then
-                savedFloor = part
-                savedFloor.Name = "THE_SACRED_FLOOR"
-                savedFloor.Parent = workspace
-                searching = false
+    findAndProtectSacredFloor(root)
+
+    for _, obj in pairs(workspace:GetChildren()) do
+        if obj ~= workspace.CurrentCamera and obj ~= char and not obj:IsA("Terrain") then
+            if obj == savedFloor or obj.Name == "THE_SACRED_FLOOR" then
+                -- Keep protected floor.
             else
-                part:Destroy()
-                task.wait(0.02)
+                local nestedFloor = findSacredFloorIn(obj)
+                if nestedFloor then
+                    protectSacredFloor(nestedFloor)
+                end
+                if obj ~= savedFloor and obj.Name ~= "THE_SACRED_FLOOR" then
+                    obj:Destroy()
+                end
             end
-        else
-            searching = false
         end
     end
 
+    -- One final pass catches floors that streamed in during cleanup.
+    findAndProtectSacredFloor(root)
+
     for _, obj in pairs(workspace:GetChildren()) do
-        if obj ~= workspace.CurrentCamera and obj ~= char then
-            if obj.Name == "THE_SACRED_FLOOR" then
-                -- Keep it
-            elseif obj ~= savedFloor and not obj:IsA("Terrain") then
+        if obj ~= workspace.CurrentCamera and obj ~= char and not obj:IsA("Terrain") then
+            if obj ~= savedFloor and obj.Name ~= "THE_SACRED_FLOOR" then
                 obj:Destroy()
             end
         end
@@ -497,12 +596,30 @@ local function startFarming()
 
     vStatus.Text = "Sitting on bike..."
     root.CFrame = seat.CFrame * CFrame.new(0, 2, 0); task.wait(0.5)
-    seat:Sit(hum); task.wait(1)
+    
+    -- Retry sitting up to 3 times (motor bug fix)
+    local sitSuccess = false
+    for sitAttempt = 1, 3 do
+        seat:Sit(hum); task.wait(1)
+        if hum.SeatPart == seat then
+            sitSuccess = true
+            break
+        end
+        vStatus.Text = "Retry sit " .. sitAttempt .. "/3..."
+        task.wait(0.5)
+    end
+    
+    if not sitSuccess then
+        vStatus.Text = "Failed to sit on bike!"
+        return
+    end
 
     pcall(function() blur:Destroy() end)
     currentVehicle = seat.Parent
     seatOffset = calculateSeatOffset(currentVehicle, seat)
     startMoney = getMoney(); startTime = os.time()
+    sessionStartMoney = startMoney; sessionStartTime = os.time()
+    unseatedSince = nil
     active = true
     setupPhysics(seat)
     
@@ -537,29 +654,41 @@ Player.CharacterAdded:Connect(function()
     isRestarting = false
 end)
 
--- =====================
--- ANTI-AFK SYSTEM
--- =====================
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local lastActivity = tick()
+task.spawn(function()
+    while true do
+        task.wait(1)
 
-coroutine.wrap(function()
-    while task.wait(30) do
-        if not active then continue end
-        
-        local now = tick()
-        if now - lastActivity >= 120 then -- 2 minutes
-            local keys = {Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D}
-            local randomKey = keys[math.random(#keys)]
-            
-            VirtualInputManager:SendKeyEvent(true, randomKey, false, game)
-            task.wait(0.05)
-            VirtualInputManager:SendKeyEvent(false, randomKey, false, game)
-            
-            lastActivity = now
+        if not active or isRespawning or isRestarting then
+            unseatedSince = nil
+            continue
+        end
+
+        local char = Player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local expectedSeat = currentVehicle and (currentVehicle:IsA("VehicleSeat") and currentVehicle or currentVehicle:FindFirstChildWhichIsA("VehicleSeat", true))
+
+        if hum and hum.SeatPart and (not expectedSeat or hum.SeatPart == expectedSeat) then
+            unseatedSince = nil
+            continue
+        end
+
+        unseatedSince = unseatedSince or os.clock()
+        if os.clock() - unseatedSince >= NOT_SEATED_TIMEOUT then
+            unseatedSince = nil
+            vStatus.Text = "Not seated for 20s! Restarting..."
+
+            if hum then
+                respawnBike(hum, "Not seated for 20s! Respawning bike...")
+            else
+                active = false
+                cleanupPhysics()
+                despawnMio()
+                task.wait(1)
+                startFarming()
+            end
         end
     end
-end)()
+end)
 
 -- =====================
 -- STATS LOOP
@@ -567,22 +696,33 @@ end)()
 coroutine.wrap(function()
     while task.wait(0.5) do
         if not active then continue end
-        local elapsed = os.time() - startTime
+        if not startTime then continue end
+
         local money   = getMoney()
-        local earned  = startMoney and (money - startMoney) or 0
-        local mph     = elapsed > 0 and math.floor((earned/elapsed)*3600) or 0
+        -- Earned THIS bike (resets on each spawn)
+        local earnedThisBike = startMoney and (money - startMoney) or 0
+        -- For money/hour, use session time
+        local sessionElapsed = sessionStartTime and (os.time() - sessionStartTime) or 0
+        local sessionEarned = sessionStartMoney and (money - sessionStartMoney) or 0
+        local mph = sessionElapsed > 60 and math.floor((sessionEarned/sessionElapsed)*3600) or 0
 
         vCurrent.Text   = "Rp. " .. formatNumber(money)
-        vEarned.Text    = "Rp. " .. formatNumber(math.max(0, earned))
-        vMoneyHour.Text = elapsed > 10 and ("Rp. " .. formatNumber(mph) .. " /hr") or "Calculating..."
-        vElapsed.Text   = formatTime(elapsed)
+        vEarned.Text    = "Rp. " .. formatNumber(math.max(0, earnedThisBike))
+        vMoneyHour.Text = sessionElapsed > 60 and ("Rp. " .. formatNumber(mph) .. " /hr") or "Calculating..."
+        vElapsed.Text   = formatTime(os.time() - startTime)
         vPing.Text      = getPing() .. " ms"
         vFPS.Text       = tostring(lastFPS)
 
-        local ct  = totalEarned + earned
-        local ctt = totalTime   + elapsed
+        -- Total stats = saved totals + current session
+        local ct = totalEarned + sessionEarned
+        local ctt = totalTime + sessionElapsed
         vTotalEarned.Text = "Rp. " .. formatNumber(ct)
         vTotalTime.Text   = formatTime(ctt)
+
+        -- Save combined totals to file periodically for crash recovery (don't update in-memory totals)
+        if sessionElapsed > 0 and sessionElapsed % 30 < 1 and writefile then
+            writefile("nznt_stealth_stats.txt", tostring(ct) .. "," .. tostring(ctt))
+        end
     end
 end)()
 
