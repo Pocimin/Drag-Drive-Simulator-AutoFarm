@@ -430,7 +430,7 @@ local function hasItemInHand()
                 local name = tool.Name:lower()
                 if name:find("coffee") or name:find("latte") or name:find("cappuccino") 
                    or name:find("espresso") or name:find("mocha") or name:find("drink")
-                   or name:find("cup") or name:find("mug") or name:find("glass") then
+                   or name:find("water") or name:find("mug") or name:find("glass") then
                     return true, tool
                 end
             end
@@ -491,15 +491,40 @@ end
 local function RepairMachine()
     local repairPos = Vector3.new(-5113.27, 3.19, -672.99)
 
+    print("[Machine Repair] Teleporting to repair box...")
     SeatTo(repairPos)
     task.wait(0.3)
 
-    local hum = Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.Jump = true end
+    -- Jump using real input
+    VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+    task.wait(0.1)
+    VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
 
     task.wait(0.3)
-    FirePrompt(repairPos)
-    task.wait(6)
+    
+    -- Hold E continuously until machine is fixed
+    print("[Machine Repair] Holding E to repair...")
+    local repairStart = tick()
+    local maxRepairTime = 15  -- Max 15 seconds to repair
+    
+    while CheckMachineBroke() and (tick() - repairStart) < maxRepairTime do
+        PressKeyE(2)  -- Hold E for 0.5 seconds
+        task.wait(0.1)  -- Small gap before next hold
+    print("[Machine Repair] Machine fixed! Teleporting back...")
+    
+    -- Teleport back to work area
+    local workPos = Vector3.new(-4989.87, 4.29, -714.39)
+    SeatTo(workPos)
+    task.wait(0.3)
+    
+    -- Jump to get off seat
+    VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+    task.wait(0.1)
+    VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+    
+    task.wait(0.5)
+end print("[Machine Repair] Machine fixed!")
+    task.wait(1)
 end
 
 -- =====================
